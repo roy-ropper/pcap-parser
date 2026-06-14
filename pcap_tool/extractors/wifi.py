@@ -127,6 +127,13 @@ def extract_wifi_events(packets):
     events   = []
 
     for p in packets:
+        # Only packets dissected from an actual 802.11/radiotap link type are
+        # tagged "_wifi" — skip everything else (e.g. Ethernet/IP frames whose
+        # _raw_frame would otherwise be misread as bogus 802.11 management
+        # frames, producing garbage SSIDs/MACs).
+        if not p.get("_wifi"):
+            continue
+
         raw = p.get("_raw_frame", b"")
         if not raw:
             continue

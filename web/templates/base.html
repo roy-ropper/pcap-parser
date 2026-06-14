@@ -10,6 +10,9 @@
   <header class="topbar">
     <a class="brand" href="{{ url_for('index') }}">pcap-tool</a>
     <span class="tagline">PCAP → network graph, diagrams &amp; pentest findings</span>
+    <nav class="topnav">
+      <a href="{{ url_for('jobs_list') }}">Job history</a>
+    </nav>
   </header>
   <main class="container">
     {% block content %}{% endblock %}

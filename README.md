@@ -24,19 +24,22 @@ dependencies, suitable for isolated/engagement networks.
 docker compose up --build
 ```
 
-Then open **http://localhost:8000**, upload a `.pcap`/`.pcapng`/`.cap` file,
-and watch the progress page. When it's done you'll be redirected to a results
-dashboard where you can browse everything and download:
+Then open **http://localhost:8000**, upload a `.pcap`/`.pcapng`/`.cap` file
+(or click one of the **sample capture** download links on the upload page to
+grab a demo `.pcap`/`.pcapng` that exercises every detector), and watch the
+progress page — it updates live and redirects automatically once the job is
+done. From there you can browse the results dashboard and download:
 
 - `report.xlsx` — the 11-sheet Excel workbook
 - `diagram_l3.drawio` — Layer 3 network diagram (draw.io / diagrams.net)
 - `diagram_l2.drawio` — Layer 2 / Wi-Fi topology diagram
 - `diagram.vsdx` — Visio network diagram
 - `certs.zip` — all extracted X.509 certificates (`.pem`)
+- `<job_id>_bundle.zip` — everything above plus `findings.json`, in one file
 
 Data persists in `./data/uploads` and `./data/outputs` on the host (mapped as
-volumes), so uploaded captures and generated reports survive container
-restarts.
+volumes), so uploaded captures, generated reports, and job history survive
+container restarts/rebuilds.
 
 To stop: `docker compose down` (add `-v` to also remove the named volumes —
 **not** needed to keep `./data`, which is a bind mount).
@@ -151,7 +154,9 @@ gunicorn -w 1 --threads 4 -b 0.0.0.0:8000 web.app:app
 ### Using it
 
 1. **Upload** (`/`): choose a `.pcap`/`.pcapng`/`.cap` file (max 500 MB by
-   default, configurable via `PCAP_TOOL_MAX_UPLOAD_MB`). Optionally expand
+   default, configurable via `PCAP_TOOL_MAX_UPLOAD_MB`), or click a **sample
+   capture** link to download a synthetic demo `.pcap`/`.pcapng` that
+   exercises every detector — handy for a quick test run. Optionally expand
    "Advanced options" for:
    - **Title** — shown on the diagrams
    - **Min packets** — same as `--min-packets`
@@ -159,23 +164,35 @@ gunicorn -w 1 --threads 4 -b 0.0.0.0:8000 web.app:app
    - **Internal networks** — space-separated CIDRs, same as `--internal-networks`
    - **Hostname file** — upload a hostname-mapping file, same format as `--hostname-file`
 
-2. **Progress** (`/jobs/<id>`): live progress log (polled every second),
-   shows each pipeline stage as it completes. Redirects automatically to the
-   results page when done.
+2. **Progress** (`/jobs/<id>`): a live progress bar, current-stage label, and
+   scrolling log (polled every second). The page automatically redirects to
+   the results dashboard as soon as the job finishes — no manual refresh
+   needed.
 
 3. **Results** (`/jobs/<id>/results`):
    - **Download links** at the top for the Excel workbook, both `.drawio`
-     diagrams, and the `.vsdx` Visio diagram.
+     diagrams, the `.vsdx` Visio diagram, and a "download everything" zip
+     bundle.
+   - A **sticky sidebar** on the left links to every section and highlights
+     whichever one is currently in view.
    - **At a Glance** — severity counts, top findings, top cleartext
      intercepts, interesting banners, Wi-Fi deauths / ARP anomalies — your
      starting point for triage.
-   - Full sections (linked via the nav pills): **Findings**, **Nodes**,
-     **Connections**, **Cleartext Intercepts**, **Banners**, **TLS Sessions**,
-     **DNS Events**, **Wi-Fi & ARP**, **Certificates**, **Traceroutes & Gateways**.
-   - Most tables have a filter box (case-insensitive substring match across
-     all columns).
+   - Full sections: **Findings**, **Nodes**, **Connections**, **Cleartext
+     Intercepts**, **Banners**, **TLS Sessions**, **DNS Events**, **Wi-Fi &
+     ARP**, **Certificates**, **Traceroutes & Gateways**, and **Network Map**.
+   - Every table column has an **Excel-style filter** (▾ dropdown with
+     search + checkboxes per value) and is sortable by clicking the header.
+   - The **Network Map** is a subnet-level overview: hosts are grouped into
+     boxes per subnet (gateways marked with ★), with lines drawn between
+     subnets (total cross-subnet traffic) and between individual hosts (the
+     busiest conversations) — hover any line for byte/connection counts and
+     protocols.
    - The **Certificates** tab lets you download individual `.pem` files or
      `certs.zip` (all certs).
+
+4. **Job history** (`/jobs`): every upload, with status, size, and links to
+   view results or delete a job (and its uploaded/generated files) entirely.
 
 ---
 

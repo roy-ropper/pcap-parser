@@ -3,6 +3,7 @@ storage in the in-memory job dict and rendering in Jinja templates."""
 
 import base64
 import datetime
+import ipaddress
 
 
 def to_jsonable(obj):
@@ -46,6 +47,99 @@ def nodes_to_list(nodes):
     return out
 
 
+CHIP_CAP = 40
+MAX_NODE_LINKS = 25
+
+
+def build_subnet_map(nodes, edges, gateways=None):
+    """Group nodes by subnet and aggregate cross-subnet traffic, for a
+    high-level "network map" overview on the results page."""
+    by_subnet = {}
+    ip_to_subnet = {}
+    for n in nodes:
+        sub = n.get("subnet", "external")
+        ip_to_subnet[n["ip"]] = sub
+        by_subnet.setdefault(sub, []).append(n)
+
+    gateway_ips = set((gateways or {}).values())
+
+    # Total bytes (either direction) per node, used to surface the busiest
+    # hosts first so they're not hidden behind the "+N more" overflow chip.
+    traffic = {}
+    for e in edges:
+        b = e.get("bytes", 0)
+        traffic[e["src"]] = traffic.get(e["src"], 0) + b
+        traffic[e["dst"]] = traffic.get(e["dst"], 0) + b
+
+    def subnet_key(s):
+        if s == "external":
+            return (1, "")
+        try:
+            return (0, ipaddress.ip_network(s))
+        except ValueError:
+            return (0, s)
+
+    role_order = {"server": 0, "host": 1, "client": 2}
+    subnets = []
+    for sub in sorted(by_subnet, key=subnet_key):
+        for n in by_subnet[sub]:
+            n["is_gateway"] = n["ip"] in gateway_ips
+            n["traffic_bytes"] = traffic.get(n["ip"], 0)
+        sub_nodes = sorted(
+            by_subnet[sub],
+            key=lambda n: (
+                0 if n["is_gateway"] else 1,
+                -n["traffic_bytes"],
+                role_order.get(n.get("role"), 3),
+                n["ip"],
+            ),
+        )
+        subnets.append({
+            "name": sub,
+            "label": "Internet / External" if sub == "external" else sub,
+            "nodes": sub_nodes,
+        })
+
+    # Only nodes actually rendered as chips (i.e. not collapsed into "+N
+    # more") can be used as endpoints for the per-host traffic lines below.
+    visible_ips = {n["ip"] for sn in subnets for n in sn["nodes"][:CHIP_CAP]}
+
+    links = {}
+    for e in edges:
+        a = ip_to_subnet.get(e["src"], "external")
+        b = ip_to_subnet.get(e["dst"], "external")
+        if a == b:
+            continue
+        key = tuple(sorted((a, b)))
+        link = links.setdefault(key, {"a": key[0], "b": key[1], "bytes": 0, "count": 0})
+        link["bytes"] += e.get("bytes", 0)
+        link["count"] += e.get("count", 0)
+
+    node_links = []
+    for e in sorted(edges, key=lambda e: -e.get("bytes", 0)):
+        if e["src"] == e["dst"]:
+            continue
+        if e["src"] not in visible_ips or e["dst"] not in visible_ips:
+            continue
+        node_links.append({
+            "src": e["src"],
+            "dst": e["dst"],
+            "bytes": e.get("bytes", 0),
+            "count": e.get("count", 0),
+            "protocols": e.get("protocols", []),
+            "ports": e.get("ports", []),
+        })
+        if len(node_links) >= MAX_NODE_LINKS:
+            break
+
+    return {
+        "subnets": subnets,
+        "links": sorted(links.values(), key=lambda l: -l["bytes"]),
+        "node_links": node_links,
+        "chip_cap": CHIP_CAP,
+    }
+
+
 def prepare_result(result):
     """Build the JSON-friendly version of a run_pipeline() result dict that
     gets stored as `job["result"]` and rendered by the results templates.
@@ -65,5 +159,7 @@ def prepare_result(result):
     sev_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
     result["findings"] = sorted(result.get("findings", []),
                                  key=lambda f: sev_order.get(f["severity"], 5))
+
+    result["subnet_map"] = build_subnet_map(result["nodes"], result["edges"], result.get("gateways"))
 
     return to_jsonable(result)

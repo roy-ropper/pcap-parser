@@ -17,6 +17,8 @@ from .conftest import (
     ipv4_packet, tcp_segment, udp_segment,
     write_pcap, write_pcapng,
     tls_client_hello_record,
+    dns_query_frame, dns_response_frame,
+    wifi_beacon_frame,
 )
 
 
@@ -90,28 +92,15 @@ def test_tls_client_hello_sni(tmp_path):
 
 # ── DNS ──────────────────────────────────────────────────────────────────────
 
-def _dns_question(name, qtype=1, qclass=1):
-    qname = b"".join(bytes([len(label)]) + label.encode() for label in name.split(".")) + b"\x00"
-    return qname + struct.pack(">HH", qtype, qclass)
-
-
 def test_dns_query_and_response(tmp_path):
     qname = "host.example.com"
 
-    # Query: QR=0, QDCOUNT=1
-    query_hdr = struct.pack(">HHHHHH", 0x1234, 0x0100, 1, 0, 0, 0)
-    query_payload = query_hdr + _dns_question(qname)
-    query_frame = eth_ip_udp("bb:bb:bb:bb:bb:bb", "aa:aa:aa:aa:aa:aa",
-                              "10.0.0.5", "8.8.8.8", 50000, 53, query_payload)
+    query_frame = dns_query_frame("bb:bb:bb:bb:bb:bb", "aa:aa:aa:aa:aa:aa",
+                                   "10.0.0.5", "8.8.8.8", 50000, qname)
 
-    # Response: QR=1, QDCOUNT=1, ANCOUNT=1
-    resp_hdr = struct.pack(">HHHHHH", 0x1234, 0x8180, 1, 1, 0, 0)
-    question = _dns_question(qname)
-    answer = (b"\xc0\x0c" + struct.pack(">HH", 1, 1) + struct.pack(">I", 300)
-              + struct.pack(">H", 4) + socket.inet_aton("93.184.216.34"))
-    resp_payload = resp_hdr + question + answer
-    resp_frame = eth_ip_udp("aa:aa:aa:aa:aa:aa", "bb:bb:bb:bb:bb:bb",
-                             "8.8.8.8", "10.0.0.5", 53, 50000, resp_payload)
+    resp_frame = dns_response_frame("aa:aa:aa:aa:aa:aa", "bb:bb:bb:bb:bb:bb",
+                                     "8.8.8.8", "10.0.0.5", 53, 50000, qname,
+                                     answer_ip="93.184.216.34", ttl=300)
 
     path = write_pcap(tmp_path / "dns.pcap", [query_frame, resp_frame])
     packets = list(parse_pcap(path))
@@ -131,16 +120,7 @@ def test_dns_query_and_response(tmp_path):
 # ── WiFi ─────────────────────────────────────────────────────────────────────
 
 def test_wifi_beacon_ap(tmp_path):
-    radiotap = struct.pack("<BBHI", 0, 0, 8, 0)
-    fc = struct.pack("<H", 0x0080)  # mgmt, beacon
-    bcast = b"\xff" * 6
-    bssid = bytes.fromhex("aabbccddeeff")
-    mac_hdr = fc + b"\x00\x00" + bcast + bssid + bssid + b"\x00\x00"
-    fixed = b"\x00" * 8 + struct.pack("<H", 100) + struct.pack("<H", 0x0421)
-    ssid = b"TestNet"
-    ssid_ie = bytes([0, len(ssid)]) + ssid
-    ds_ie = bytes([3, 1, 6])
-    frame = radiotap + mac_hdr + fixed + ssid_ie + ds_ie
+    frame = wifi_beacon_frame("TestNet", bssid="aa:bb:cc:dd:ee:ff", channel=6)
 
     path = write_pcap(tmp_path / "wifi.pcap", [frame], ltype=127)
     packets = list(parse_pcap(path))

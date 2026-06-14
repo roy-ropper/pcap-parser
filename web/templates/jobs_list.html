@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Job history — pcap-tool{% endblock %}
+{% block content %}
+<h1>Job history</h1>
+<p class="muted">All uploads processed in this session, with on-disk usage. Delete jobs you no
+longer need to free up space.</p>
+
+{% if jobs %}
+<table class="job-table">
+  <thead>
+    <tr>
+      <th>Filename</th>
+      <th>Status</th>
+      <th>Created</th>
+      <th>Size</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for job in jobs %}
+    <tr>
+      <td>{{ job.filename }}</td>
+      <td>{{ job.state }}</td>
+      <td>{{ job.created_at|datetimeformat }}</td>
+      <td>{{ job.size_bytes|filesizeformat }}</td>
+      <td>
+        {% if job.state == "done" %}
+        <a href="{{ url_for('job_results', job_id=job.id) }}">View results</a>
+        {% endif %}
+        <form method="post" action="{{ url_for('job_delete', job_id=job.id) }}"
+              onsubmit="return confirm('Delete this job and all its data?')" class="inline-form">
+          <button type="submit" class="btn-danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No jobs yet. <a href="{{ url_for('index') }}">Upload a capture</a> to get started.</p>
+{% endif %}
+{% endblock %}

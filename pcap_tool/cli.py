@@ -23,6 +23,22 @@ from .diagrams.vsdx import generate_vsdx
 from .excel.workbook import generate_xlsx
 
 
+# Major pipeline stages, in order — used to report a 0-100% progress value
+# and a human-readable "current module" label to the web dashboard.
+PIPELINE_STAGES = [
+    "Parsing capture",
+    "Building network graph",
+    "Detecting gateways",
+    "Reconstructing traceroutes",
+    "Extracting banners & resources",
+    "Analysing TLS sessions",
+    "Extracting DNS events",
+    "Surveying Wi-Fi (802.11)",
+    "Extracting certificates",
+    "Generating diagrams",
+]
+
+
 def write_certs_to_dir(certificates, certs_dir):
     """Write each certificate's DER and PEM-encoded bytes to `certs_dir`."""
     os.makedirs(certs_dir, exist_ok=True)
@@ -46,15 +62,22 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
     """
     Run the full parse → analyse → diagram pipeline and return a results dict.
 
-    `progress_cb`, if given, is called with a single human-readable status
-    string at each major stage — used by both the CLI (printed to stdout)
-    and the web dashboard (surfaced as job progress).
+    `progress_cb`, if given, is called as `progress_cb(msg, pct, stage_label)`
+    with a human-readable status string at each major stage — used by both
+    the CLI (printed to stdout) and the web dashboard (surfaced as job
+    progress, including a percent-complete value and the current stage's
+    label so the user can see it hasn't hung). `pct`/`stage_label` are None
+    for intermediate detail messages within a stage.
     """
-    def progress(msg):
+    def progress(msg, stage=None):
         if progress_cb:
-            progress_cb(msg)
+            if stage is not None:
+                pct = round(100 * stage / len(PIPELINE_STAGES))
+                progress_cb(msg, pct, PIPELINE_STAGES[stage])
+            else:
+                progress_cb(msg, None, None)
 
-    progress(f"[*] Parsing {pcap_path} ...")
+    progress(f"[*] Parsing {pcap_path} ...", stage=0)
     packets = list(parse_pcap(pcap_path))
 
     progress(f"[*] {len(packets):,} packets")
@@ -73,6 +96,7 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         if parsed:
             extra_hn["__internal_networks__"] = parsed
 
+    progress("[*] Building network graph ...", stage=1)
     nodes, edges, rows, findings, cleartext_hits, arp_table = build_graph(
         packets, min_packets, collapse_external, extra_hn)
 
@@ -85,6 +109,7 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
              f"{sum(1 for f in findings if f['severity']=='MEDIUM')} MEDIUM)")
 
     # Gateway detection
+    progress("[*] Detecting gateways ...", stage=2)
     gateways = detect_gateways(packets, nodes)
     if gateways:
         progress(f"[*] {len(gateways)} gateway(s) detected: " +
@@ -93,6 +118,7 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         progress("[*] No gateways detected")
 
     # Traceroute reconstruction
+    progress("[*] Reconstructing traceroutes ...", stage=3)
     traceroutes = extract_traceroutes(packets)
     passive_hn = resolve_hostnames_from_packets(packets)
     all_hn = {**passive_hn, **extra_hn}
@@ -108,6 +134,7 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
             progress(f"    {tr['src']} → [{hops_str}] → {tr['dst']}")
 
     # Banner / resource extraction
+    progress("[*] Extracting banners & resources ...", stage=4)
     banner_hits = extract_banners(packets)
     dns_hits    = [b for b in banner_hits if b["banner_type"] == "DNS Query"]
     svc_banners = [b for b in banner_hits if b["category"] == "Banner"]
@@ -115,12 +142,14 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
     progress(f"[*] {len(svc_banners)} service banners · {len(resources)} resources · {len(dns_hits)} DNS queries")
 
     # TLS handshake analysis
+    progress("[*] Analysing TLS sessions ...", stage=5)
     tls_sessions = extract_tls_sessions(packets)
     n_tls_issues = sum(1 for s in tls_sessions if s.get("issues"))
     progress(f"[*] {len(tls_sessions)} TLS session(s) reconstructed  "
              f"({n_tls_issues} with issues)")
 
     # DNS / mDNS event log
+    progress("[*] Extracting DNS events ...", stage=6)
     dns_events = extract_dns_events(packets)
     n_mdns     = sum(1 for e in dns_events if e.get("proto") == "mDNS")
     n_nxdomain = sum(1 for e in dns_events if e.get("rcode") == "NXDOMAIN")
@@ -132,6 +161,7 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         progress(f"[*] {len(dns_findings)} DNS tunneling indicator(s) flagged")
 
     # Wi-Fi 802.11 network survey
+    progress("[*] Surveying Wi-Fi (802.11) ...", stage=7)
     wifi_data   = extract_wifi_events(packets)
     n_aps       = len(wifi_data["aps"])
     n_clients   = len(wifi_data["clients"])
@@ -142,6 +172,7 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         progress("[*] No 802.11 frames detected (not a Wi-Fi capture)")
 
     # Certificate extraction (TLS + EAP-TLS/802.1X)
+    progress("[*] Extracting certificates ...", stage=8)
     certificates = extract_certificates(packets, tls_sessions, wifi_data)
     n_eaptls = sum(1 for c in certificates if c["source"] == "EAP-TLS")
     if certificates:
@@ -152,6 +183,7 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         write_certs_to_dir(certificates, certs_dir)
         progress(f"[*] {len(certificates)} certificate(s) written → {certs_dir}/")
 
+    progress("[*] Generating diagrams ...", stage=9)
     drawio_l3_xml = generate_drawio(nodes, findings, gateways, traceroutes, title=title)
     drawio_l2_xml = generate_l2_drawio(wifi_data, nodes, arp_table,
                                         title=f"{title} — L2/Wi-Fi Topology")
@@ -211,7 +243,7 @@ def main():
             internal_networks=args.internal_networks,
             title=args.title,
             certs_dir=certs_dir,
-            progress_cb=print,
+            progress_cb=lambda msg, pct=None, stage=None: print(msg),
         )
     except FileNotFoundError:
         print(f"[!] Not found: {args.pcap}", file=sys.stderr); sys.exit(1)

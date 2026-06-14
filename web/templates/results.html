@@ -9,9 +9,16 @@
   <a href="{{ url_for('job_download', job_id=job.id, artifact='drawio_l3') }}">L3 Diagram (.drawio)</a>
   <a href="{{ url_for('job_download', job_id=job.id, artifact='drawio_l2') }}">L2/Wi-Fi Diagram (.drawio)</a>
   <a href="{{ url_for('job_download', job_id=job.id, artifact='vsdx') }}">Visio Diagram (.vsdx)</a>
+  <a href="{{ url_for('job_download_all_zip', job_id=job.id) }}">Download everything (.zip)</a>
 </div>
 
-<div class="nav-pills">
+<form method="post" action="{{ url_for('job_delete', job_id=job.id) }}"
+      onsubmit="return confirm('Delete this job and all its data?')" class="inline-form">
+  <button type="submit" class="btn-danger">Delete this job &amp; its data</button>
+</form>
+
+<div class="results-layout">
+<nav class="sidebar-nav">
   <a href="#glance">At a Glance</a>
   <a href="#findings">Findings</a>
   <a href="#nodes">Nodes</a>
@@ -23,7 +30,9 @@
   <a href="#wifi">Wi-Fi</a>
   <a href="#certificates">Certificates</a>
   <a href="#traceroutes">Gateways / Traceroutes</a>
-</div>
+  <a href="#network-map">Network Map</a>
+</nav>
+<div class="results-main">
 
 <h2 id="glance">At a Glance</h2>
 {% set sev_counts = {'CRITICAL':0,'HIGH':0,'MEDIUM':0,'LOW':0,'INFO':0} %}
@@ -107,4 +116,8 @@
 {% include "partials/wifi.html" %}
 {% include "partials/certificates.html" %}
 {% include "partials/traceroutes.html" %}
+{% include "partials/network_map.html" %}
+
+</div>
+</div>
 {% endblock %}

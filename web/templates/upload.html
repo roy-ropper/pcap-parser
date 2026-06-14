@@ -8,6 +8,14 @@
   dashboard with network diagrams, an Excel workbook, and pentest findings.
 </p>
 
+<div class="card">
+  <strong>Try it:</strong>
+  <a href="{{ url_for('demo_pcap') }}">download a sample capture</a> that exercises every
+  detector and extractor, or
+  <a href="{{ url_for('demo_wifi_pcap') }}">a Wi-Fi survey sample</a> (beacon + deauth) — then
+  upload it below to explore the dashboard.
+</div>
+
 {% if error %}
 <div class="alert alert-error">{{ error }}</div>
 {% endif %}

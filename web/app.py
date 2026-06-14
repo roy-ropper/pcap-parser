@@ -1,6 +1,8 @@
 """Flask web dashboard — upload a pcap, watch progress, browse/download results."""
 
+import datetime
 import io
+import json
 import os
 import zipfile
 
@@ -9,6 +11,8 @@ from flask import (
     send_file, url_for,
 )
 from werkzeug.utils import secure_filename
+
+from pcap_tool.demo.scenario import build_demo_pcap, build_demo_wifi_pcap
 
 from . import jobs
 from .jobs import UPLOAD_DIR, OUTPUT_DIR
@@ -23,9 +27,37 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
+@app.template_filter("datetimeformat")
+def datetimeformat(timestamp):
+    return datetime.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+
+
 @app.route("/")
 def index():
     return render_template("upload.html")
+
+
+@app.route("/demo.pcap")
+def demo_pcap():
+    return send_file(io.BytesIO(build_demo_pcap()), as_attachment=True,
+                      download_name="demo.pcap", mimetype="application/vnd.tcpdump.pcap")
+
+
+@app.route("/demo_wifi.pcapng")
+def demo_wifi_pcap():
+    return send_file(io.BytesIO(build_demo_wifi_pcap()), as_attachment=True,
+                      download_name="demo_wifi.pcapng", mimetype="application/x-pcapng")
+
+
+@app.route("/jobs")
+def jobs_list():
+    return render_template("jobs_list.html", jobs=jobs.list_jobs())
+
+
+@app.route("/jobs/<job_id>/delete", methods=["POST"])
+def job_delete(job_id):
+    jobs.delete_job(job_id)
+    return redirect(url_for("jobs_list"))
 
 
 @app.route("/upload", methods=["POST"])
@@ -83,12 +115,16 @@ def job_status(job_id):
     job = jobs.get_job(job_id)
     if not job:
         abort(404)
-    return jsonify({
+    resp = jsonify({
         "state": job["state"],
         "progress": job["progress"],
+        "progress_pct": job["progress_pct"],
+        "current_stage": job["current_stage"],
         "error": job["error"],
         "done": job["state"] in ("done", "error"),
     })
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 @app.route("/jobs/<job_id>/results")
@@ -154,6 +190,30 @@ def job_download_certs_zip(job_id):
             zf.write(os.path.join(certs_dir, fn), arcname=fn)
     buf.seek(0)
     return send_file(buf, as_attachment=True, download_name="certs.zip", mimetype="application/zip")
+
+
+@app.route("/jobs/<job_id>/download/all.zip")
+def job_download_all_zip(job_id):
+    job = jobs.get_job(job_id)
+    if not job or job["state"] != "done":
+        abort(404)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for key, arcname in (("xlsx", "report.xlsx"),
+                              ("drawio_l3", "diagram_l3.drawio"),
+                              ("drawio_l2", "diagram_l2.drawio"),
+                              ("vsdx", "diagram.vsdx")):
+            p = job["paths"].get(key)
+            if p and os.path.isfile(p):
+                zf.write(p, arcname=arcname)
+        certs_dir = job["paths"].get("certs_dir")
+        if certs_dir and os.path.isdir(certs_dir):
+            for fn in sorted(os.listdir(certs_dir)):
+                zf.write(os.path.join(certs_dir, fn), arcname=f"certs/{fn}")
+        zf.writestr("findings.json", json.dumps(job["result"]["findings"], indent=2))
+    buf.seek(0)
+    return send_file(buf, as_attachment=True,
+                      download_name=f"{job_id}_bundle.zip", mimetype="application/zip")
 
 
 if __name__ == "__main__":

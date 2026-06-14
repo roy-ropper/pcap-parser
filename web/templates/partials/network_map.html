@@ -1,0 +1,39 @@
+<h2 id="network-map">Network Map</h2>
+{% if result.subnet_map.subnets|length > 1 and result.subnet_map.links %}
+<p class="muted">High-level view of detected subnets and hosts. Thicker grey lines show traffic between subnets; thicker blue lines show the busiest individual host-to-host conversations — hover any line for details.</p>
+{% else %}
+<p class="muted">High-level view of detected subnets and hosts. Hover a host chip or line for details.</p>
+{% endif %}
+
+<div class="network-map-legend">
+  <span class="legend-item"><span class="node-chip role-server">server</span> responds on open ports</span>
+  <span class="legend-item"><span class="node-chip role-host">host</span> talks both ways</span>
+  <span class="legend-item"><span class="node-chip role-client">client</span> only initiates</span>
+  <span class="legend-item"><span class="node-chip role-external">external</span> outside monitored subnets</span>
+  <span class="legend-item"><span class="node-chip gateway">10.0.0.1</span> detected gateway</span>
+  <span class="legend-item"><span class="legend-line legend-line-subnet"></span> subnet ↔ subnet traffic</span>
+  <span class="legend-item"><span class="legend-line legend-line-host"></span> top host ↔ host conversations</span>
+</div>
+
+<div class="network-map-wrap">
+  <svg class="network-map-svg" id="network-map-svg"></svg>
+  <div class="network-map" id="network-map-boxes">
+    {% for sn in result.subnet_map.subnets %}
+    <div class="subnet-box" data-subnet="{{ sn.name }}">
+      <h4>{{ sn.label }} <span class="muted">({{ sn.nodes|length }})</span></h4>
+      <div class="subnet-nodes">
+        {% for n in sn.nodes[:result.subnet_map.chip_cap] %}
+        <span class="node-chip role-{{ n.role }}{{ ' gateway' if n.is_gateway else '' }}"
+              data-ip="{{ n.ip }}"
+              title="{{ n.hostname or n.ip }} — {{ n.role }}{{ ' — gateway' if n.is_gateway else '' }} — {{ '%.1f'|format(n.traffic_bytes / 1048576) }} MB total">{{ n.ip }}</span>
+        {% endfor %}
+        {% if sn.nodes|length > result.subnet_map.chip_cap %}
+        <span class="node-chip more">+{{ sn.nodes|length - result.subnet_map.chip_cap }} more</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<script type="application/json" id="network-map-links">{{ result.subnet_map.links|tojson }}</script>
+<script type="application/json" id="network-map-node-links">{{ result.subnet_map.node_links|tojson }}</script>

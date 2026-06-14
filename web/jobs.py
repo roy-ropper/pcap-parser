@@ -8,8 +8,11 @@ worker would be invisible to another. If this needs to scale beyond one
 process, replace JOBS with a shared store (Redis, a database, etc).
 """
 
+import json
 import os
+import shutil
 import threading
+import time
 import traceback
 import uuid
 
@@ -25,6 +28,42 @@ JOBS = {}
 _JOBS_LOCK = threading.Lock()
 
 
+def _job_json_path(job_id):
+    return os.path.join(OUTPUT_DIR, job_id, "job.json")
+
+
+def _persist_job(job):
+    """Write a finished job's record to disk so it survives a process
+    restart (the in-memory JOBS dict otherwise loses all jobs, breaking
+    download links and the job history page after every restart)."""
+    path = _job_json_path(job["id"])
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(job, f)
+    except OSError:
+        pass
+
+
+def _load_persisted_jobs():
+    """Rehydrate JOBS from job.json files written before a previous restart."""
+    if not os.path.isdir(OUTPUT_DIR):
+        return
+    for job_id in os.listdir(OUTPUT_DIR):
+        path = _job_json_path(job_id)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as f:
+                job = json.load(f)
+        except (OSError, ValueError):
+            continue
+        JOBS.setdefault(job["id"], job)
+
+
+_load_persisted_jobs()
+
+
 def create_job(filename):
     job_id = uuid.uuid4().hex
     job = {
@@ -32,9 +71,12 @@ def create_job(filename):
         "filename": filename,
         "state": "queued",
         "progress": [],
+        "progress_pct": 0,
+        "current_stage": "",
         "error": None,
         "result": None,
         "paths": {},
+        "created_at": time.time(),
     }
     with _JOBS_LOCK:
         JOBS[job_id] = job
@@ -43,6 +85,36 @@ def create_job(filename):
 
 def get_job(job_id):
     return JOBS.get(job_id)
+
+
+def _dir_size(path):
+    total = 0
+    for dirpath, _dirnames, filenames in os.walk(path):
+        for fn in filenames:
+            total += os.path.getsize(os.path.join(dirpath, fn))
+    return total
+
+
+def list_jobs():
+    """Return all jobs, newest first, each annotated with on-disk size_bytes."""
+    with _JOBS_LOCK:
+        snapshot = list(JOBS.values())
+    jobs_with_size = []
+    for job in sorted(snapshot, key=lambda j: j["created_at"], reverse=True):
+        job = dict(job)
+        size = _dir_size(os.path.join(UPLOAD_DIR, job["id"])) + _dir_size(os.path.join(OUTPUT_DIR, job["id"]))
+        job["size_bytes"] = size
+        jobs_with_size.append(job)
+    return jobs_with_size
+
+
+def delete_job(job_id):
+    """Remove a job's in-memory record and on-disk upload/output data."""
+    with _JOBS_LOCK:
+        existed = JOBS.pop(job_id, None) is not None
+    shutil.rmtree(os.path.join(UPLOAD_DIR, job_id), ignore_errors=True)
+    shutil.rmtree(os.path.join(OUTPUT_DIR, job_id), ignore_errors=True)
+    return existed
 
 
 def start_job(job_id, pcap_path, options):
@@ -59,8 +131,11 @@ def _run_job(job_id, pcap_path, options):
     os.makedirs(out_dir, exist_ok=True)
     certs_dir = os.path.join(out_dir, "certs")
 
-    def progress_cb(msg):
+    def progress_cb(msg, pct=None, stage=None):
         job["progress"].append(msg)
+        if pct is not None:
+            job["progress_pct"] = pct
+            job["current_stage"] = stage
 
     try:
         result = run_pipeline(
@@ -102,6 +177,8 @@ def _run_job(job_id, pcap_path, options):
         }
 
         job["result"] = prepare_result(result)
+        job["progress_pct"] = 100
+        job["current_stage"] = "Done"
         job["state"] = "done"
 
     except Exception as e:
@@ -109,3 +186,5 @@ def _run_job(job_id, pcap_path, options):
         job["progress"].append(f"[!] Error: {e}")
         job["progress"].append(traceback.format_exc())
         job["state"] = "error"
+
+    _persist_job(job)
