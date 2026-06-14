@@ -1,0 +1,10 @@
+services:
+  pcap-tool:
+    build: .
+    image: pcap-tool:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/uploads:/data/uploads
+      - ./data/outputs:/data/outputs
+    restart: unless-stopped

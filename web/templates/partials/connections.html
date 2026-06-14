@@ -1,0 +1,20 @@
+<h2 id="connections">Connections ({{ result.edges|length }})</h2>
+<input class="filter-box" type="text" placeholder="Filter connections…" data-filter-table="connections-table">
+<table class="data" id="connections-table">
+  <thead>
+    <tr><th>Source</th><th>Destination</th><th>Protocols</th><th>Ports</th><th>Resources</th><th>Packets</th><th>Bytes</th></tr>
+  </thead>
+  <tbody>
+    {% for e in result.edges|sort(attribute='bytes', reverse=True) %}
+    <tr>
+      <td>{{ e.src }}</td>
+      <td>{{ e.dst }}</td>
+      <td>{{ e.protocols|join(', ') }}</td>
+      <td>{{ e.ports|join(', ') }}</td>
+      <td>{{ e.resources|join(', ') }}</td>
+      <td>{{ e.count }}</td>
+      <td>{{ e.bytes }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

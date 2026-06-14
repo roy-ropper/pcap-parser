@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local virtualenvs
+venv/
+.venv/
+
+# Web dashboard upload/output data (bind-mounted into the container)
+data/
+
+# Generated CLI outputs
+*.drawio
+*.vsdx
+*.xlsx
+*_certs/
+
+# Editor/OS cruft
+.vscode/
+.idea/
+*.swp
+.DS_Store

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Results — {{ result.title }}{% endblock %}
+{% block content %}
+<h1>{{ result.title }}</h1>
+<p class="muted">Source file: <code>{{ job.filename }}</code></p>
+
+<div class="downloads">
+  <a href="{{ url_for('job_download', job_id=job.id, artifact='xlsx') }}">Excel workbook (.xlsx)</a>
+  <a href="{{ url_for('job_download', job_id=job.id, artifact='drawio_l3') }}">L3 Diagram (.drawio)</a>
+  <a href="{{ url_for('job_download', job_id=job.id, artifact='drawio_l2') }}">L2/Wi-Fi Diagram (.drawio)</a>
+  <a href="{{ url_for('job_download', job_id=job.id, artifact='vsdx') }}">Visio Diagram (.vsdx)</a>
+</div>
+
+<div class="nav-pills">
+  <a href="#glance">At a Glance</a>
+  <a href="#findings">Findings</a>
+  <a href="#nodes">Nodes</a>
+  <a href="#connections">Connections</a>
+  <a href="#cleartext">Cleartext</a>
+  <a href="#banners">Banners</a>
+  <a href="#tls">TLS</a>
+  <a href="#dns">DNS</a>
+  <a href="#wifi">Wi-Fi</a>
+  <a href="#certificates">Certificates</a>
+  <a href="#traceroutes">Gateways / Traceroutes</a>
+</div>
+
+<h2 id="glance">At a Glance</h2>
+{% set sev_counts = {'CRITICAL':0,'HIGH':0,'MEDIUM':0,'LOW':0,'INFO':0} %}
+{% for f in result.findings %}{% if f.severity in sev_counts %}{% set _ = sev_counts.update({f.severity: sev_counts[f.severity] + 1}) %}{% endif %}{% endfor %}
+<div class="glance-grid">
+  <div class="glance-stat"><div class="num">{{ result.nodes|length }}</div><div class="label">Nodes</div></div>
+  <div class="glance-stat"><div class="num">{{ result.edges|length }}</div><div class="label">Connections</div></div>
+  <div class="glance-stat"><div class="num">{{ sev_counts.CRITICAL }}</div><div class="label">Critical findings</div></div>
+  <div class="glance-stat"><div class="num">{{ sev_counts.HIGH }}</div><div class="label">High findings</div></div>
+  <div class="glance-stat"><div class="num">{{ sev_counts.MEDIUM }}</div><div class="label">Medium findings</div></div>
+  <div class="glance-stat"><div class="num">{{ result.cleartext_hits|length }}</div><div class="label">Cleartext intercepts</div></div>
+  <div class="glance-stat"><div class="num">{{ result.certificates|length }}</div><div class="label">Certificates</div></div>
+</div>
+
+<div class="card">
+  <h3>Top findings</h3>
+  {% if result.findings %}
+  <ul>
+    {% for f in result.findings[:8] %}
+    <li><span class="badge badge-{{ f.severity }}">{{ f.severity }}</span>
+        {{ f.category }} — {{ f.src }} → {{ f.dst }}: {{ f.detail }}</li>
+    {% endfor %}
+  </ul>
+  {% if result.findings|length > 8 %}<p class="muted"><a href="#findings">See all {{ result.findings|length }} findings…</a></p>{% endif %}
+  {% else %}
+  <p class="muted">No pentest findings.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Top cleartext intercepts</h3>
+  {% if result.cleartext_hits %}
+  <ul>
+    {% for h in result.cleartext_hits[:8] %}
+    <li>{{ h.protocol }} {{ h.type }}: <strong>{{ h.value }}</strong> ({{ h.src_ip }} → {{ h.dst_ip }})</li>
+    {% endfor %}
+  </ul>
+  {% if result.cleartext_hits|length > 8 %}<p class="muted"><a href="#cleartext">See all {{ result.cleartext_hits|length }}…</a></p>{% endif %}
+  {% else %}
+  <p class="muted">No cleartext credentials or sensitive data detected.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Interesting banners</h3>
+  {% if result.banner_hits %}
+  <ul>
+    {% for h in result.banner_hits[:8] %}
+    <li class="feed-item">{{ h.banner_type }} ({{ h.server_ip }}): {{ h.value }}</li>
+    {% endfor %}
+  </ul>
+  {% if result.banner_hits|length > 8 %}<p class="muted"><a href="#banners">See all {{ result.banner_hits|length }}…</a></p>{% endif %}
+  {% else %}
+  <p class="muted">No banners or notable resources detected.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Wi-Fi &amp; ARP anomalies</h3>
+  {% set deauths = result.wifi_data.events|selectattr('frame_type','equalto','Deauthentication')|list %}
+  {% set arp_findings = result.findings|selectattr('category','equalto','ARP Anomaly / Possible MITM')|list %}
+  {% if deauths or arp_findings %}
+  <ul>
+    {% if deauths %}<li class="feed-item">{{ deauths|length }} 802.11 deauthentication frame(s) seen — see <a href="#wifi">Wi-Fi</a></li>{% endif %}
+    {% for f in arp_findings %}
+    <li class="feed-item">ARP anomaly: {{ f.detail }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">No Wi-Fi deauths or ARP anomalies observed.</p>
+  {% endif %}
+</div>
+
+{% include "partials/findings.html" %}
+{% include "partials/nodes.html" %}
+{% include "partials/connections.html" %}
+{% include "partials/cleartext.html" %}
+{% include "partials/banners.html" %}
+{% include "partials/tls.html" %}
+{% include "partials/dns.html" %}
+{% include "partials/wifi.html" %}
+{% include "partials/certificates.html" %}
+{% include "partials/traceroutes.html" %}
+{% endblock %}

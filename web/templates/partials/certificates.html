@@ -1,0 +1,48 @@
+<h2 id="certificates">Certificates ({{ result.certificates|length }})</h2>
+{% if not result.certificates %}
+<p class="muted">No X.509 certificates observed (no TLS handshakes or EAP-TLS/802.1X exchanges
+with certificate exchange found).</p>
+{% else %}
+<p>
+  <a href="{{ url_for('job_download_certs_zip', job_id=job.id) }}">Download all certificates (.zip)</a>
+</p>
+<input class="filter-box" type="text" placeholder="Filter certificates…" data-filter-table="certs-table">
+<table class="data" id="certs-table">
+  <thead>
+    <tr>
+      <th>Source</th><th>Context</th><th>SNI</th><th>Subject CN</th><th>Issuer CN</th><th>SANs</th>
+      <th>Valid From</th><th>Valid To</th><th>Status</th><th>Key</th><th>SHA-256</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in result.certificates %}
+    <tr class="{{ 'row-CRITICAL' if c.expired else ('row-MEDIUM' if c.expiring_soon else ('row-HIGH' if c.source == 'EAP-TLS' else '')) }}">
+      <td>{{ c.source }}</td>
+      <td>{{ c.context }}</td>
+      <td>{{ c.sni }}</td>
+      <td>{{ c.subject }}</td>
+      <td>{{ c.issuer }}</td>
+      <td>{{ c.sans }}</td>
+      <td>{{ c.not_before }}</td>
+      <td>{{ c.not_after }}</td>
+      <td>{{ 'EXPIRED' if c.expired else ('Expiring soon' if c.expiring_soon else 'OK') }}</td>
+      <td>{{ c.key_type }} {{ c.key_bits or '' }}</td>
+      <td><code>{{ c.fingerprint_sha256[:16] }}…</code></td>
+      <td><a href="{{ url_for('job_download_cert', job_id=job.id, fingerprint=c.fingerprint_sha256) }}">.pem</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% set id_findings = result.findings|selectattr('category', 'equalto', 'EAP-TLS Client Identity Disclosure')|list %}
+{% if id_findings %}
+<h3>EAP-TLS Client Identity Disclosure</h3>
+<p class="muted">Client certificate identities exposed during the EAP-TLS outer handshake — useful
+for username enumeration. See also <a href="#findings">Pentest Findings</a>.</p>
+<ul>
+  {% for f in id_findings %}
+  <li>{{ f.src }}: {{ f.detail }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endif %}

@@ -1,0 +1,23 @@
+<h2 id="findings">Pentest Findings ({{ result.findings|length }})</h2>
+{% if not result.findings %}
+<p class="muted">No findings.</p>
+{% else %}
+<input class="filter-box" type="text" placeholder="Filter findings…" data-filter-table="findings-table">
+<table class="data" id="findings-table">
+  <thead>
+    <tr><th>Severity</th><th>Category</th><th>Source</th><th>Destination</th><th>Detail</th><th>Recommendation</th></tr>
+  </thead>
+  <tbody>
+    {% for f in result.findings %}
+    <tr class="row-{{ f.severity }}">
+      <td><span class="badge badge-{{ f.severity }}">{{ f.severity }}</span></td>
+      <td>{{ f.category }}</td>
+      <td>{{ f.src }}</td>
+      <td>{{ f.dst }}</td>
+      <td>{{ f.detail }}</td>
+      <td>{{ f.recommendation }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}

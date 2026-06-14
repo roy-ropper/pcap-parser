@@ -1,0 +1,34 @@
+<h2 id="traceroutes">Gateways &amp; Traceroutes</h2>
+
+<h3>Detected Gateways</h3>
+{% if not result.gateways %}
+<p class="muted">No gateways detected.</p>
+{% else %}
+<table class="data">
+  <thead><tr><th>Subnet</th><th>Gateway IP</th></tr></thead>
+  <tbody>
+    {% for subnet, ip in result.gateways.items() %}
+    <tr><td>{{ subnet }}</td><td>{{ ip }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h3>Traceroute Paths ({{ result.traceroutes|length }})</h3>
+{% if not result.traceroutes %}
+<p class="muted">No traceroute paths reconstructed.</p>
+{% else %}
+{% for tr in result.traceroutes %}
+<div class="card">
+  <strong>{{ tr.src_hostname or tr.src }} → {{ tr.dst_hostname or tr.dst }}</strong>
+  <table class="data">
+    <thead><tr><th>#</th><th>Hop IP</th><th>Hostname</th></tr></thead>
+    <tbody>
+      {% for hop in tr.hops %}
+      <tr><td>{{ loop.index }}</td><td>{{ hop.router_ip }}</td><td>{{ hop.hostname }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+{% endif %}

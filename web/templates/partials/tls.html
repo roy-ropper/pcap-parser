@@ -1,0 +1,36 @@
+<h2 id="tls">TLS Sessions ({{ result.tls_sessions|length }})</h2>
+{% if not result.tls_sessions %}
+<p class="muted">No TLS handshakes detected in capture.</p>
+{% else %}
+<input class="filter-box" type="text" placeholder="Filter TLS sessions…" data-filter-table="tls-table">
+<table class="data" id="tls-table">
+  <thead>
+    <tr>
+      <th>Client</th><th>Server</th><th>Port</th><th>SNI</th><th>ALPN</th>
+      <th>TLS Version</th><th>Cipher Suite</th><th>Cert Subject</th><th>Cert Issuer</th>
+      <th>Valid From</th><th>Expiry</th><th>Key</th><th>Handshake</th><th>Alerts</th><th>Issues</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in result.tls_sessions %}
+    <tr class="{{ 'row-CRITICAL' if s.cert_expired else ('row-HIGH' if (s.weak_cipher or s.weak_version) else ('row-MEDIUM' if (s.issues or s.cert_expiring_soon) else '')) }}">
+      <td>{{ s.client_ip }}</td>
+      <td>{{ s.server_ip }}</td>
+      <td>{{ s.server_port or '' }}</td>
+      <td>{{ s.sni }}</td>
+      <td>{{ s.alpn }}</td>
+      <td>{{ s.tls_version }}</td>
+      <td>{{ s.cipher_suite }}</td>
+      <td>{{ s.cert_subject }}</td>
+      <td>{{ s.cert_issuer }}</td>
+      <td>{{ s.cert_not_before }}</td>
+      <td>{{ s.cert_not_after }}</td>
+      <td>{{ s.cert_key_type }} {{ s.cert_key_bits or '' }}</td>
+      <td>{{ 'Yes' if s.handshake_complete else 'Partial' }}</td>
+      <td>{{ s.alerts|join('; ') if s.alerts else '' }}</td>
+      <td>{{ s.issues|join('; ') if s.issues else '' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}

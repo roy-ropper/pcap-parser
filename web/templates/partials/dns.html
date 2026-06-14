@@ -1,0 +1,28 @@
+<h2 id="dns">DNS / mDNS Events ({{ result.dns_events|length }})</h2>
+{% if not result.dns_events %}
+<p class="muted">No DNS/mDNS events captured in this PCAP.</p>
+{% else %}
+<input class="filter-box" type="text" placeholder="Filter DNS events…" data-filter-table="dns-table">
+<table class="data" id="dns-table">
+  <thead>
+    <tr><th>Dir</th><th>Proto</th><th>Client</th><th>Server</th><th>Query Name</th><th>Type</th><th>Answer</th><th>Answer Name</th><th>TTL</th><th>RCode</th><th>Flags</th></tr>
+  </thead>
+  <tbody>
+    {% for e in result.dns_events %}
+    <tr class="{{ 'row-MEDIUM' if e.rcode == 'NXDOMAIN' else '' }}">
+      <td>{{ '← Response' if e.is_response else '→ Query' }}</td>
+      <td>{{ e.proto }}</td>
+      <td>{{ e.client_ip }}</td>
+      <td>{{ e.server_ip }}</td>
+      <td>{{ e.query_name }}</td>
+      <td>{{ e.qtype }}</td>
+      <td>{{ e.answer_val }}</td>
+      <td>{{ e.answer_name }}</td>
+      <td>{{ e.ttl or '' }}</td>
+      <td>{{ e.rcode }}</td>
+      <td>{{ e.flags_desc }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}

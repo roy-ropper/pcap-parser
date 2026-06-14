@@ -1,0 +1,29 @@
+<h2 id="nodes">Node Summary ({{ result.nodes|length }})</h2>
+<input class="filter-box" type="text" placeholder="Filter nodes…" data-filter-table="nodes-table">
+<table class="data" id="nodes-table">
+  <thead>
+    <tr>
+      <th>IP</th><th>Hostname</th><th>MACs</th><th>Subnet</th><th>Role</th>
+      <th>OS Guess</th><th>Private?</th><th>Protocols</th><th>Open Ports</th>
+      <th>Flags</th><th>Packets</th><th>Bytes</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for n in result.nodes|sort(attribute='ip') %}
+    <tr class="{{ 'row-HIGH' if '🔴' in (n.flags|join('')) else '' }}">
+      <td>{{ n.ip }}</td>
+      <td>{{ n.hostname }}</td>
+      <td>{{ n.macs|join(', ') }}</td>
+      <td>{{ n.subnet }}</td>
+      <td>{{ n.role }}</td>
+      <td>{{ n.os_guess }}</td>
+      <td>{{ 'Yes' if n.is_private else 'No' }}</td>
+      <td>{{ n.protocols|join(', ') }}</td>
+      <td>{{ n.open_ports|join(', ') }}</td>
+      <td>{{ n.flags|join('; ') }}</td>
+      <td>{{ n.count }}</td>
+      <td>{{ n.bytes }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>

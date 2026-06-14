@@ -1,0 +1,25 @@
+<h2 id="cleartext">Cleartext Intercepts ({{ result.cleartext_hits|length }})</h2>
+{% if not result.cleartext_hits %}
+<p class="muted">No cleartext credentials or sensitive data detected.</p>
+{% else %}
+<input class="filter-box" type="text" placeholder="Filter intercepts…" data-filter-table="cleartext-table">
+<table class="data" id="cleartext-table">
+  <thead>
+    <tr><th>Protocol</th><th>Type</th><th>Value</th><th>Context</th><th>Source IP</th><th>Dest IP</th><th>Src Port</th><th>Dst Port</th></tr>
+  </thead>
+  <tbody>
+    {% for h in result.cleartext_hits %}
+    <tr>
+      <td>{{ h.protocol }}</td>
+      <td>{{ h.type }}</td>
+      <td>{{ h.value }}</td>
+      <td>{{ h.context }}</td>
+      <td>{{ h.src_ip }}</td>
+      <td>{{ h.dst_ip }}</td>
+      <td>{{ h.src_port or '' }}</td>
+      <td>{{ h.dst_port or '' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}

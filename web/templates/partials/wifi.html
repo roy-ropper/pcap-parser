@@ -1,0 +1,77 @@
+<h2 id="wifi">Wi-Fi Survey</h2>
+{% set aps = result.wifi_data.aps %}
+{% set clients = result.wifi_data.clients %}
+{% set events = result.wifi_data.events %}
+
+{% if not aps and not clients %}
+<p class="muted">No 802.11 management frames found. To capture Wi-Fi data, use monitor mode:
+  <code>airmon-ng start wlan0 &amp;&amp; tcpdump -i wlan0mon -w wifi.pcap</code></p>
+{% else %}
+
+<h3>Access Points ({{ aps|length }})</h3>
+<table class="data">
+  <thead>
+    <tr><th>BSSID</th><th>SSID</th><th>Channel</th><th>Encryption</th><th>WPS</th><th>Beacons</th><th>Probe Resp</th><th>Clients</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    {% for ap in aps %}
+    <tr class="{{ 'row-HIGH' if (ap.enc == 'Open' or ap.wps) else '' }}">
+      <td>{{ ap.bssid }}</td>
+      <td>{{ ap.ssid or '<Hidden>' }}</td>
+      <td>{{ ap.channel or '' }}</td>
+      <td>{{ ap.enc }}</td>
+      <td>{{ 'Yes' if ap.wps else 'No' }}</td>
+      <td>{{ ap.beacons or 0 }}</td>
+      <td>{{ ap.probe_responses or 0 }}</td>
+      <td>{{ ap.clients|join(', ') if ap.clients else 'None seen' }}</td>
+      <td>
+        {% if ap.enc == 'Open' %}⚠ Open network — no encryption{% endif %}
+        {% if ap.wps %}⚠ WPS enabled — KRACK/Pixie-Dust risk{% endif %}
+        {% if not ap.ssid %}Hidden SSID{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3>Clients / Stations ({{ clients|length }})</h3>
+<table class="data">
+  <thead>
+    <tr><th>Client MAC</th><th>Associated BSSID</th><th>Associated SSID</th><th>Probed SSIDs</th></tr>
+  </thead>
+  <tbody>
+    {% for cl in clients %}
+    <tr>
+      <td>{{ cl.mac }}</td>
+      <td>{{ cl.associated_bssid }}</td>
+      <td>{{ cl.assoc_ssid }}</td>
+      <td>{{ cl.probed_ssids|join(', ') if cl.probed_ssids else '(wildcard only)' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if events %}
+<h3>802.11 Management Frame Events ({{ events|length }})</h3>
+<input class="filter-box" type="text" placeholder="Filter events…" data-filter-table="wifi-events-table">
+<table class="data" id="wifi-events-table">
+  <thead>
+    <tr><th>Frame Type</th><th>Source MAC</th><th>Destination MAC</th><th>BSSID</th><th>SSID</th><th>Detail</th></tr>
+  </thead>
+  <tbody>
+    {% for ev in events[:500] %}
+    <tr class="{{ 'row-HIGH' if ev.frame_type in ('Deauthentication','Disassociation') else '' }}">
+      <td>{{ ev.frame_type }}</td>
+      <td>{{ ev.src_mac }}</td>
+      <td>{{ ev.dst_mac }}</td>
+      <td>{{ ev.bssid }}</td>
+      <td>{{ ev.ssid }}</td>
+      <td>{{ ev.detail }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if events|length > 500 %}<p class="muted">Showing first 500 of {{ events|length }} events.</p>{% endif %}
+{% endif %}
+
+{% endif %}

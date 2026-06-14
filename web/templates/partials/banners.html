@@ -1,0 +1,25 @@
+<h2 id="banners">Banner &amp; Resource Intelligence ({{ result.banner_hits|length }})</h2>
+{% if not result.banner_hits %}
+<p class="muted">No banners or notable resources detected.</p>
+{% else %}
+<input class="filter-box" type="text" placeholder="Filter banners…" data-filter-table="banners-table">
+<table class="data" id="banners-table">
+  <thead>
+    <tr><th>Category</th><th>Type</th><th>Server/Host IP</th><th>Client IP</th><th>Port</th><th>Protocol</th><th>Value</th><th>Context</th></tr>
+  </thead>
+  <tbody>
+    {% for h in result.banner_hits %}
+    <tr>
+      <td>{{ h.category }}</td>
+      <td>{{ h.banner_type }}</td>
+      <td>{{ h.server_ip }}</td>
+      <td>{{ h.client_ip }}</td>
+      <td>{{ h.port or '' }}</td>
+      <td>{{ h.protocol }}</td>
+      <td>{{ h.value }}</td>
+      <td>{{ h.context or '' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
