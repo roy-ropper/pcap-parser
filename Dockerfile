@@ -1,6 +1,8 @@
 # ── Builder ──────────────────────────────────────────────────────────────
 FROM python:3.12-slim AS builder
 
+ENV PIP_TRUSTED_HOST="pypi.org files.pythonhosted.org"
+
 WORKDIR /app
 COPY requirements.txt .
 RUN python -m venv /venv \
