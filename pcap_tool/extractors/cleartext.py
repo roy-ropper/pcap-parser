@@ -3,6 +3,7 @@
 import base64 as _b64, re as _re
 
 from ..constants import CLEARTEXT_PROTOS
+from .dns import _decode_nbns_payload
 
 def extract_cleartext(pkt):
     """

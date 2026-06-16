@@ -243,4 +243,15 @@ def build_graph(packets, min_packets=1, collapse_external=False, extra_hostnames
 
     findings = compute_findings(nodes, edges, arp_table, conn_times, packets)
 
+    # Deduplicate cleartext hits: same (protocol, type, value, src_ip) is noise,
+    # not signal — especially for NetBIOS broadcasts which repeat every packet.
+    seen_hit_keys = set()
+    deduped = []
+    for h in cleartext_hits:
+        key = (h.get("protocol"), h.get("type"), h.get("value"), h.get("src_ip"))
+        if key not in seen_hit_keys:
+            seen_hit_keys.add(key)
+            deduped.append(h)
+    cleartext_hits = deduped
+
     return nodes, edges, rows, findings, cleartext_hits, dict(arp_table)

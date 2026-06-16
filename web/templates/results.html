@@ -50,11 +50,90 @@
   {% endif %}
 </div>
 {% endif %}
-<div class="card" style="overflow-x:auto;padding:0.5rem">
-  <img src="{{ url_for('job_topology_svg', job_id=job.id) }}"
-       alt="Network topology diagram"
-       style="max-width:100%;border:1px solid #e0e0e0;border-radius:4px">
+<div class="card" style="padding:0.5rem">
+  <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem">
+    <button onclick="svgZoom(1.25)" title="Zoom in"
+            style="padding:0.2rem 0.6rem;font-size:1rem;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#fff">+</button>
+    <button onclick="svgZoom(0.8)" title="Zoom out"
+            style="padding:0.2rem 0.6rem;font-size:1rem;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#fff">−</button>
+    <button onclick="svgReset()" title="Reset view"
+            style="padding:0.2rem 0.6rem;font-size:0.8rem;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#fff">Reset</button>
+    <span class="muted" style="font-size:0.8em;margin-left:0.3rem">Scroll to zoom · Drag to pan</span>
+  </div>
+  <div id="svg-viewport" style="overflow:hidden;border:1px solid #e0e0e0;border-radius:4px;
+       background:#fafafa;height:520px;position:relative;cursor:grab">
+    <div id="svg-canvas" style="position:absolute;top:0;left:0;transform-origin:0 0">
+      <img id="svg-img" src="{{ url_for('job_topology_svg', job_id=job.id) }}"
+           alt="Network topology diagram"
+           style="display:block;max-width:none">
+    </div>
+  </div>
 </div>
+<script>
+(function(){
+  var vp = document.getElementById('svg-viewport');
+  var canvas = document.getElementById('svg-canvas');
+  var img = document.getElementById('svg-img');
+  var scale = 1, tx = 0, ty = 0;
+  var dragging = false, startX, startY, startTx, startTy;
+
+  function applyTransform(){
+    canvas.style.transform = 'translate('+tx+'px,'+ty+'px) scale('+scale+')';
+  }
+
+  function fitOnLoad(){
+    var iw = img.naturalWidth || img.offsetWidth;
+    var ih = img.naturalHeight || img.offsetHeight;
+    if(!iw || !ih) return;
+    var vw = vp.clientWidth, vh = vp.clientHeight;
+    scale = Math.min(vw/iw, vh/ih, 1);
+    tx = (vw - iw*scale)/2;
+    ty = (vh - ih*scale)/2;
+    applyTransform();
+  }
+
+  img.addEventListener('load', fitOnLoad);
+  if(img.complete) fitOnLoad();
+
+  window.svgZoom = function(factor){
+    var vw = vp.clientWidth, vh = vp.clientHeight;
+    var cx = vw/2, cy = vh/2;
+    tx = cx - (cx - tx)*factor;
+    ty = cy - (cy - ty)*factor;
+    scale *= factor;
+    applyTransform();
+  };
+
+  window.svgReset = function(){ tx=0;ty=0;scale=1; fitOnLoad(); };
+
+  vp.addEventListener('wheel', function(e){
+    e.preventDefault();
+    var factor = e.deltaY < 0 ? 1.12 : 0.89;
+    var rect = vp.getBoundingClientRect();
+    var cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    tx = cx - (cx - tx)*factor;
+    ty = cy - (cy - ty)*factor;
+    scale *= factor;
+    applyTransform();
+  }, {passive:false});
+
+  vp.addEventListener('mousedown', function(e){
+    if(e.button !== 0) return;
+    dragging=true; startX=e.clientX; startY=e.clientY; startTx=tx; startTy=ty;
+    vp.style.cursor='grabbing';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', function(e){
+    if(!dragging) return;
+    tx = startTx + (e.clientX - startX);
+    ty = startTy + (e.clientY - startY);
+    applyTransform();
+  });
+  window.addEventListener('mouseup', function(){
+    if(dragging){ dragging=false; vp.style.cursor='grab'; }
+  });
+})();
+</script>
 {% if enable_drawio_viewer %}
 <details class="card" style="margin-top:0.5rem">
   <summary style="cursor:pointer;font-weight:bold">&#128196; Open in diagrams.net (opt-in viewer)</summary>
