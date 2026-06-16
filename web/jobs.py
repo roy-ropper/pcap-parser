@@ -154,7 +154,8 @@ def _run_job(job_id, pcap_path, options):
         generate_xlsx(result["rows"], result["nodes"], result["edges"], result["findings"],
                        result["cleartext_hits"], result["banner_hits"], result["tls_sessions"],
                        result["dns_events"], result["wifi_data"], xlsx_path,
-                       certificates=result["certificates"])
+                       certificates=result["certificates"],
+                       network_names=result.get("network_names"))
 
         l3_path = os.path.join(out_dir, "diagram_l3.drawio")
         with open(l3_path, "w", encoding="utf-8") as f:

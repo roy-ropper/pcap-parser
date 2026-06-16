@@ -309,10 +309,10 @@ def main():
                         certificates=result["certificates"],
                         network_names=result.get("network_names"))
     if ok:
-        print(f"[+] Workbook → {out_xl}  (11 sheets: Connections, Node Summary, "
+        print(f"[+] Workbook → {out_xl}  (12 sheets: Connections, Node Summary, "
               f"Pentest Findings, Protocol Summary, Port Inventory, "
               f"Cleartext Intercepts, Banner Intel, TLS Sessions, "
-              f"DNS Events, Wi-Fi Networks, Certificates)")
+              f"DNS Events, Wi-Fi Networks, Certificates, Network Names)")
 
     print()
     print("  draw.io: File → Import From → Device → .drawio file")
