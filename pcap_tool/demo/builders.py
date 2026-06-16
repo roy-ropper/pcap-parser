@@ -293,6 +293,81 @@ def eapol_eap_tls_frame(src_mac, dst_mac, tls_bytes, eap_type=13, code=1, ident=
     return eth_frame(dst_mac, src_mac, 0x888E, eapol)
 
 
+# ── DHCP / LLMNR frame builders ─────────────────────────────────────────────
+
+def dhcp_offer_frame(src_mac, src_ip, client_mac, offered_ip, hostname, domain_suffix,
+                     txid=0x12345678):
+    """Build a minimal DHCP OFFER (BOOTP REPLY) with Options 12 and 15.
+
+    src_mac/src_ip  = DHCP server.
+    client_mac      = client's MAC address (embedded in chaddr field).
+    offered_ip      = IP offered to the client (yiaddr).
+    """
+    def mac_b(m):
+        return bytes(int(x, 16) for x in m.split(":"))
+
+    op_htype_hlen_hops = struct.pack("BBBB", 2, 1, 6, 0)
+    xid_b      = struct.pack(">I", txid)
+    secs_flags = struct.pack(">HH", 0, 0)
+    ciaddr     = socket.inet_aton("0.0.0.0")
+    yiaddr     = socket.inet_aton(offered_ip)
+    siaddr     = socket.inet_aton(src_ip)
+    giaddr     = socket.inet_aton("0.0.0.0")
+    chaddr     = mac_b(client_mac) + b"\x00" * 10  # 6 MAC + 10 pad = 16
+    sname_file = b"\x00" * (64 + 128)
+
+    bootp = (op_htype_hlen_hops + xid_b + secs_flags
+             + ciaddr + yiaddr + siaddr + giaddr
+             + chaddr + sname_file)
+    magic = b"\x63\x82\x53\x63"
+
+    opts = bytes([53, 1, 2])              # message type = OFFER
+    opts += bytes([54, 4]) + socket.inet_aton(src_ip)  # server identifier
+    if hostname:
+        hn = hostname.encode("ascii")
+        opts += bytes([12, len(hn)]) + hn
+    if domain_suffix:
+        ds = domain_suffix.encode("ascii")
+        opts += bytes([15, len(ds)]) + ds
+    opts += bytes([255])                  # end option
+
+    payload = bootp + magic + opts
+    return eth_ip_udp(src_mac, "ff:ff:ff:ff:ff:ff", src_ip, "255.255.255.255",
+                      67, 68, payload)
+
+
+def llmnr_query_frame(src_mac, src_ip, query_name, txid=0x5355, sport=49152):
+    """Build a minimal LLMNR query (DNS wire format, UDP/5355).
+
+    Sent from src to the IPv4 LLMNR multicast address 224.0.0.252.
+    """
+    question = dns_question(query_name, qtype=1, qclass=1)
+    hdr = struct.pack(">HHHHHH", txid, 0x0000, 1, 0, 0, 0)  # QR=0, QDCOUNT=1
+    payload = hdr + question
+    return eth_ip_udp(src_mac, "01:00:5e:00:00:fc", src_ip, "224.0.0.252",
+                      sport, 5355, payload)
+
+
+def llmnr_response_frame(src_mac, src_ip, query_name, answer_ip,
+                          txid=0x5355, dst_mac="aa:bb:cc:dd:ee:ff",
+                          dst_ip="10.0.0.99", dport=49152):
+    """Build a minimal LLMNR response (DNS wire format, UDP/5355) with an A record.
+
+    Sent unicast from the responder (src) back to the querying host (dst).
+    """
+    question = dns_question(query_name, qtype=1, qclass=1)
+    # A record answer: name pointer 0xC00C, type A(1), class IN(1), TTL 30, rdlen 4, IP
+    answer = (b"\xc0\x0c"
+              + struct.pack(">HH", 1, 1)
+              + struct.pack(">I", 30)
+              + struct.pack(">H", 4)
+              + socket.inet_aton(answer_ip))
+    flags = 0x8000  # QR=1, everything else 0
+    hdr = struct.pack(">HHHHHH", txid, flags, 1, 1, 0, 0)
+    payload = hdr + question + answer
+    return eth_ip_udp(src_mac, dst_mac, src_ip, dst_ip, 5355, dport, payload)
+
+
 # ── PCAPNG file builders ─────────────────────────────────────────────────────
 
 def _pcapng_block(btype, body):

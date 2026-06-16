@@ -1,0 +1,80 @@
+<h2 id="network-names">Network Names &amp; Domains</h2>
+{% set nn = result.get('network_names', {}) %}
+{% if not nn %}
+<p class="muted">Network naming data not available (capture pre-dates this feature).</p>
+{% else %}
+
+{% if nn.discovered_domains %}
+<div class="card" style="margin-bottom:0.75rem">
+  <strong>Discovered Domains / Workgroups</strong>
+  <div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem">
+    {% for d in nn.discovered_domains %}
+    <span style="display:inline-block;background:#e8f0fe;border:1px solid #4472c4;
+                 border-radius:4px;padding:0.2rem 0.6rem;font-family:monospace;font-size:0.85em">
+      {{ d }}
+    </span>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<p class="muted">No domain names discovered in this capture (no DHCP opt-15 or recurring DNS query patterns).</p>
+{% endif %}
+
+{% if nn.dhcp_leases %}
+<h3 style="margin-top:1rem">DHCP Lease Table ({{ nn.dhcp_leases|length }})</h3>
+<table class="data" id="dhcp-lease-table">
+  <thead>
+    <tr>
+      <th>MAC Address</th>
+      <th>IP Address</th>
+      <th>Hostname</th>
+      <th>Domain Suffix</th>
+      <th>FQDN</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for lease in nn.dhcp_leases %}
+    <tr>
+      <td><code>{{ lease.mac or '' }}</code></td>
+      <td>{{ lease.ip or '' }}</td>
+      <td>{{ lease.hostname or '' }}</td>
+      <td>{{ lease.domain_suffix or '' }}</td>
+      <td>{% if lease.fqdn %}<strong>{{ lease.fqdn }}</strong>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No DHCP OFFER/ACK packets observed — no lease table available.</p>
+{% endif %}
+
+{% if nn.llmnr_queries %}
+<h3 style="margin-top:1.5rem">LLMNR Events ({{ nn.llmnr_queries|length }})</h3>
+<p class="muted" style="font-size:0.85em">LLMNR (UDP/5355) is Windows name resolution. Unexpected responses may indicate
+<strong>Responder / Inveigh MITM poisoning</strong>.</p>
+<input class="filter-box" type="text" placeholder="Filter LLMNR events…" data-filter-table="llmnr-table">
+<table class="data" id="llmnr-table">
+  <thead>
+    <tr>
+      <th>Direction</th>
+      <th>Source IP</th>
+      <th>Query Name</th>
+      <th>Answer IP</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for ev in nn.llmnr_queries %}
+    <tr class="{{ 'row-HIGH' if ev.is_response and ev.answer_ip else '' }}">
+      <td>{{ '← Response' if ev.is_response else '→ Query' }}</td>
+      <td>{{ ev.src_ip }}</td>
+      <td>{{ ev.query }}</td>
+      <td>{% if ev.answer_ip %}<strong style="color:#c55a11">{{ ev.answer_ip }}</strong>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No LLMNR traffic observed in this capture.</p>
+{% endif %}
+
+{% endif %}

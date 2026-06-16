@@ -8,7 +8,7 @@ import sys
 
 from .parser import parse_pcap
 from .graph.build import build_graph
-from .graph.findings import compute_certificate_findings, compute_dns_findings
+from .graph.findings import compute_certificate_findings, compute_dns_findings, compute_llmnr_findings
 from .graph.gateways import detect_gateways
 from .graph.hostnames import load_hostname_file, resolve_hostnames_from_packets
 from .extractors.traceroute import extract_traceroutes
@@ -16,6 +16,7 @@ from .extractors.banners import extract_banners
 from .extractors.tls import extract_tls_sessions
 from .extractors.certificates import extract_certificates
 from .extractors.dns import extract_dns_events
+from .extractors.names import extract_network_names
 from .extractors.wifi import extract_wifi_events
 from .topology.model import build_topology
 from .topology.render_policy import select_edges
@@ -36,6 +37,7 @@ PIPELINE_STAGES = [
     "Extracting banners & resources",
     "Analysing TLS sessions",
     "Extracting DNS events",
+    "Extracting network names (DHCP/LLMNR)",
     "Surveying Wi-Fi (802.11)",
     "Extracting certificates",
     "Generating diagrams",
@@ -163,8 +165,28 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         findings.extend(dns_findings)
         progress(f"[*] {len(dns_findings)} DNS tunneling indicator(s) flagged")
 
+    # Network naming context (DHCP leases, LLMNR, discovered domains)
+    progress("[*] Extracting network names (DHCP/LLMNR) ...", stage=7)
+    network_names = extract_network_names(packets, dns_events=dns_events)
+    # Merge FQDNs into node hostnames (FQDN > bare DHCP hostname)
+    for ip, fqdn in network_names["fqdns"].items():
+        if ip in nodes:
+            nodes[ip]["fqdn"] = fqdn
+            if not nodes[ip]["hostname"] or "." not in nodes[ip]["hostname"]:
+                nodes[ip]["hostname"] = fqdn
+    n_dom = len(network_names["discovered_domains"])
+    n_leases = len(network_names["dhcp_leases"])
+    n_llmnr = len(network_names["llmnr_queries"])
+    progress(f"[*] Domains: {', '.join(network_names['discovered_domains']) or 'none discovered'}")
+    progress(f"[*] {n_leases} DHCP lease(s) · {n_llmnr} LLMNR event(s) · {n_dom} domain(s)")
+    llmnr_findings = compute_llmnr_findings(
+        network_names["llmnr_queries"], nodes, gateways)
+    if llmnr_findings:
+        findings.extend(llmnr_findings)
+        progress(f"[*] {len(llmnr_findings)} LLMNR poisoning indicator(s) flagged")
+
     # Wi-Fi 802.11 network survey
-    progress("[*] Surveying Wi-Fi (802.11) ...", stage=7)
+    progress("[*] Surveying Wi-Fi (802.11) ...", stage=8)
     wifi_data   = extract_wifi_events(packets)
     n_aps       = len(wifi_data["aps"])
     n_clients   = len(wifi_data["clients"])
@@ -175,7 +197,7 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         progress("[*] No 802.11 frames detected (not a Wi-Fi capture)")
 
     # Certificate extraction (TLS + EAP-TLS/802.1X)
-    progress("[*] Extracting certificates ...", stage=8)
+    progress("[*] Extracting certificates ...", stage=9)
     certificates = extract_certificates(packets, tls_sessions, wifi_data)
     n_eaptls = sum(1 for c in certificates if c["source"] == "EAP-TLS")
     if certificates:
@@ -186,7 +208,7 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         write_certs_to_dir(certificates, certs_dir)
         progress(f"[*] {len(certificates)} certificate(s) written → {certs_dir}/")
 
-    progress("[*] Generating diagrams ...", stage=9)
+    progress("[*] Generating diagrams ...", stage=10)
 
     _partial = dict(
         packets=packets, nodes=nodes, edges=edges, findings=findings,
@@ -214,6 +236,7 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         banner_hits=banner_hits, tls_sessions=tls_sessions,
         dns_events=dns_events, wifi_data=wifi_data,
         certificates=certificates,
+        network_names=network_names,
         drawio_l3_xml=drawio_l3_xml, drawio_l2_xml=drawio_l2_xml,
         vsdx_bytes=vsdx_bytes,
         topology_svg=topology_svg,
@@ -283,7 +306,8 @@ def main():
     ok = generate_xlsx(result["rows"], result["nodes"], result["edges"], result["findings"],
                         result["cleartext_hits"], result["banner_hits"], result["tls_sessions"],
                         result["dns_events"], result["wifi_data"], out_xl,
-                        certificates=result["certificates"])
+                        certificates=result["certificates"],
+                        network_names=result.get("network_names"))
     if ok:
         print(f"[+] Workbook → {out_xl}  (11 sheets: Connections, Node Summary, "
               f"Pentest Findings, Protocol Summary, Port Inventory, "

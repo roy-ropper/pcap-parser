@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from ..constants import CLEARTEXT_PROTOS, LATERAL_PROTOS, SUSPICIOUS_PORTS, WELL_KNOWN
 
-def generate_xlsx(rows, nodes, edges, findings, cleartext_hits, banner_hits, tls_sessions, dns_events, wifi_data, output_path, certificates=None):
+def generate_xlsx(rows, nodes, edges, findings, cleartext_hits, banner_hits, tls_sessions, dns_events, wifi_data, output_path, certificates=None, network_names=None):
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -910,6 +910,141 @@ def generate_xlsx(rows, nodes, edges, findings, cleartext_hits, banner_hits, tls
         cert_summ.alignment = Alignment(horizontal="left", vertical="center", indent=1)
         ws11.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(HDR11))
 
+
+    # ── Sheet 12: Network Names (DHCP leases, LLMNR, discovered domains) ─────
+    if network_names:
+        ws12 = wb.create_sheet("Network Names")
+        nn = network_names
+
+        # ── Section A: Discovered domains ─────────────────────────────────
+        ws12.cell(row=1, column=1, value="NETWORK NAMING CONTEXT")
+        hdr_a = ws12.cell(row=1, column=1)
+        hdr_a.font  = Font(name="Arial", bold=True, size=11, color="FFFFFF")
+        hdr_a.fill  = PatternFill("solid", fgColor="1F4E79")
+        hdr_a.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        ws12.row_dimensions[1].height = 28
+        ws12.merge_cells(start_row=1, start_column=1, end_row=1, end_column=5)
+
+        ws12.cell(row=2, column=1, value="Discovered Domains / Workgroups")
+        sec_a = ws12.cell(row=2, column=1)
+        sec_a.font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
+        sec_a.fill = PatternFill("solid", fgColor="2E75B6")
+        sec_a.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        ws12.row_dimensions[2].height = 20
+        ws12.merge_cells(start_row=2, start_column=1, end_row=2, end_column=5)
+
+        HDR_A = ["Domain / Workgroup", "Source"]
+        for ci, h in enumerate(HDR_A, 1):
+            c = ws12.cell(row=3, column=ci, value=h)
+            c.font  = Font(name="Arial", bold=True, color="FFFFFF", size=9)
+            c.fill  = PatternFill("solid", fgColor="4472C4")
+            c.alignment = Alignment(horizontal="left", vertical="center")
+            c.border = bdr
+        ws12.row_dimensions[3].height = 18
+
+        domains = nn.get("discovered_domains", [])
+        if domains:
+            for ri, domain in enumerate(domains, 4):
+                ws12.row_dimensions[ri].height = 16
+                alt = (ri % 2 == 0)
+                body_cell(ws12, ri, 1, domain, alt)
+                body_cell(ws12, ri, 2, "DHCP Option 15 / DNS query pattern", alt)
+            dom_end = 3 + len(domains)
+        else:
+            ws12.cell(row=4, column=1, value="No domains discovered in this capture")
+            ws12.cell(row=4, column=1).font = Font(name="Arial", size=9, italic=True, color="888888")
+            dom_end = 4
+
+        # ── Section B: DHCP Lease Table ───────────────────────────────────
+        lease_hdr_row = dom_end + 2
+        ws12.cell(row=lease_hdr_row, column=1, value="DHCP Lease Table")
+        sec_b = ws12.cell(row=lease_hdr_row, column=1)
+        sec_b.font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
+        sec_b.fill = PatternFill("solid", fgColor="2E75B6")
+        sec_b.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        ws12.row_dimensions[lease_hdr_row].height = 20
+        ws12.merge_cells(start_row=lease_hdr_row, start_column=1,
+                         end_row=lease_hdr_row, end_column=5)
+
+        lease_col_hdr = lease_hdr_row + 1
+        HDR_B = ["MAC Address", "IP Address", "Hostname", "Domain Suffix", "FQDN"]
+        for ci, h in enumerate(HDR_B, 1):
+            c = ws12.cell(row=lease_col_hdr, column=ci, value=h)
+            c.font  = Font(name="Arial", bold=True, color="FFFFFF", size=9)
+            c.fill  = PatternFill("solid", fgColor="4472C4")
+            c.alignment = Alignment(horizontal="left", vertical="center")
+            c.border = bdr
+        ws12.row_dimensions[lease_col_hdr].height = 18
+
+        leases = nn.get("dhcp_leases", [])
+        lease_data_start = lease_col_hdr + 1
+        if leases:
+            for ri, lease in enumerate(leases, lease_data_start):
+                ws12.row_dimensions[ri].height = 16
+                alt = (ri % 2 == 0)
+                body_cell(ws12, ri, 1, lease.get("mac") or "", alt)
+                body_cell(ws12, ri, 2, lease.get("ip") or "", alt)
+                body_cell(ws12, ri, 3, lease.get("hostname") or "", alt)
+                body_cell(ws12, ri, 4, lease.get("domain_suffix") or "", alt)
+                fqdn_cell = body_cell(ws12, ri, 5, lease.get("fqdn") or "", alt)
+                if lease.get("fqdn"):
+                    fqdn_cell.font = Font(name="Arial", size=9, bold=True, color="1F4E79")
+            lease_end = lease_data_start + len(leases) - 1
+        else:
+            ws12.cell(row=lease_data_start, column=1,
+                      value="No DHCP OFFER/ACK packets observed in this capture")
+            ws12.cell(row=lease_data_start, column=1).font = Font(
+                name="Arial", size=9, italic=True, color="888888")
+            lease_end = lease_data_start
+
+        # ── Section C: LLMNR Events ───────────────────────────────────────
+        llmnr_hdr_row = lease_end + 2
+        ws12.cell(row=llmnr_hdr_row, column=1, value="LLMNR Events (Windows Name Resolution / Poisoning Detection)")
+        sec_c = ws12.cell(row=llmnr_hdr_row, column=1)
+        sec_c.font = Font(name="Arial", bold=True, size=10, color="FFFFFF")
+        sec_c.fill = PatternFill("solid", fgColor="2E75B6")
+        sec_c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        ws12.row_dimensions[llmnr_hdr_row].height = 20
+        ws12.merge_cells(start_row=llmnr_hdr_row, start_column=1,
+                         end_row=llmnr_hdr_row, end_column=5)
+
+        llmnr_col_hdr = llmnr_hdr_row + 1
+        HDR_C = ["Source IP", "Query Name", "Direction", "Answer IP", "Timestamp (µs)"]
+        for ci, h in enumerate(HDR_C, 1):
+            c = ws12.cell(row=llmnr_col_hdr, column=ci, value=h)
+            c.font  = Font(name="Arial", bold=True, color="FFFFFF", size=9)
+            c.fill  = PatternFill("solid", fgColor="4472C4")
+            c.alignment = Alignment(horizontal="left", vertical="center")
+            c.border = bdr
+        ws12.row_dimensions[llmnr_col_hdr].height = 18
+
+        llmnr_events = nn.get("llmnr_queries", [])
+        llmnr_data_start = llmnr_col_hdr + 1
+        if llmnr_events:
+            for ri, ev in enumerate(llmnr_events[:500], llmnr_data_start):
+                ws12.row_dimensions[ri].height = 16
+                alt = (ri % 2 == 0)
+                direction = "← Response" if ev.get("is_response") else "→ Query"
+                body_cell(ws12, ri, 1, ev.get("src_ip", ""), alt)
+                body_cell(ws12, ri, 2, ev.get("query", ""), alt)
+                dir_c = body_cell(ws12, ri, 3, direction, alt, centre=True)
+                if ev.get("is_response"):
+                    dir_c.font = Font(name="Arial", size=9, bold=True, color="1A4A1A")
+                answer_cell = body_cell(ws12, ri, 4, ev.get("answer_ip") or "", alt)
+                if ev.get("answer_ip"):
+                    answer_cell.font = Font(name="Arial", size=9, bold=True, color="C55A11")
+                body_cell(ws12, ri, 5, ev.get("ts_us", ""), alt, centre=True)
+        else:
+            ws12.cell(row=llmnr_data_start, column=1,
+                      value="No LLMNR (UDP/5355) traffic observed in this capture")
+            ws12.cell(row=llmnr_data_start, column=1).font = Font(
+                name="Arial", size=9, italic=True, color="888888")
+
+        ws12.column_dimensions["A"].width = 18
+        ws12.column_dimensions["B"].width = 30
+        ws12.column_dimensions["C"].width = 16
+        ws12.column_dimensions["D"].width = 18
+        ws12.column_dimensions["E"].width = 36
 
     wb.save(output_path)
     return True

@@ -343,12 +343,19 @@ def _dns_skip_name(data, offset):
 
 
 def _parse_dhcp(data, setter):
-    """Extract DHCP Option 12 (Hostname) and correlate with yiaddr/ciaddr."""
+    """Extract DHCP Options 12/15/81 hostnames/FQDNs and correlate with yiaddr/ciaddr.
+
+    Priority 1.5 is used for full FQDNs (opt 81, or opt 12+15 combined) so they
+    rank above bare-hostname DHCP opt-12 (priority 2) but below authoritative DNS (1).
+    """
     try:
         if len(data) < 240: return
         yiaddr = socket.inet_ntoa(data[16:20])
         ciaddr = socket.inet_ntoa(data[12:16])
-        i = 240; hostname = None
+        i = 240
+        hostname = None
+        domain_suffix = None
+        client_fqdn = None
         while i < len(data):
             opt = data[i]; i += 1
             if opt == 255: break
@@ -357,11 +364,38 @@ def _parse_dhcp(data, setter):
             ln = data[i]; i += 1
             val = data[i:i+ln]; i += ln
             if opt == 12:
-                hostname = val.decode("ascii","replace").strip("\x00").strip()
-        if hostname:
-            for ip in (yiaddr, ciaddr):
-                if ip and ip not in ("0.0.0.0","255.255.255.255"):
-                    setter(ip, hostname, 2)
+                hostname = val.decode("ascii", "replace").strip("\x00").strip()
+            elif opt == 15:
+                domain_suffix = val.decode("ascii", "replace").strip("\x00").strip().lower()
+            elif opt == 81 and ln >= 3:
+                # RFC 4702: flags(1) + RCODE1(1) + RCODE2(1) + FQDN
+                flags = val[0]
+                e_bit = (flags >> 2) & 1  # 1 = DNS wire format, 0 = ASCII
+                try:
+                    if e_bit:
+                        name, _ = _dns_read_name(val, 3)
+                        if name:
+                            client_fqdn = name.rstrip(".")
+                    else:
+                        raw = val[3:].decode("ascii", "replace").strip("\x00").strip()
+                        if raw:
+                            client_fqdn = raw
+                except Exception:
+                    pass
+
+        ips = [ip for ip in (yiaddr, ciaddr)
+               if ip and ip not in ("0.0.0.0", "255.255.255.255")]
+
+        if client_fqdn:
+            for ip in ips:
+                setter(ip, client_fqdn, 1.5)
+        elif hostname and domain_suffix and "." not in hostname:
+            fqdn = f"{hostname}.{domain_suffix}"
+            for ip in ips:
+                setter(ip, fqdn, 1.5)
+        elif hostname:
+            for ip in ips:
+                setter(ip, hostname, 2)
     except Exception:
         pass
 

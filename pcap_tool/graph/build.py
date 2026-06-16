@@ -236,6 +236,10 @@ def build_graph(packets, min_packets=1, collapse_external=False, extra_hostnames
             if ip in nodes:
                 nodes[ip]["hostname"] = hn
 
+    # fqdn field — populated later by cli.py after extract_network_names()
+    for info in nodes.values():
+        info["fqdn"] = None
+
 
     findings = compute_findings(nodes, edges, arp_table, conn_times, packets)
 

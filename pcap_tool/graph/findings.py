@@ -212,6 +212,60 @@ def compute_findings(nodes, edges, arp_table, conn_times, packets):
     return findings
 
 
+def compute_llmnr_findings(llmnr_events, nodes, gateways):
+    """Finding #14 — LLMNR Poisoning Indicator.
+
+    Fires when an LLMNR response is seen from a host that is NOT the captured
+    network's gateway AND whose reported hostname does not match the name it is
+    claiming to answer for (the classic Responder/Inveigh pattern: any host
+    that answers an LLMNR query for a name it doesn't legitimately own).
+    """
+    findings = []
+    gateway_ips = set((gateways or {}).values())
+    seen = set()
+
+    for ev in (llmnr_events or []):
+        if not ev.get("is_response"):
+            continue
+        responder_ip = ev.get("src_ip", "")
+        query_name = ev.get("query", "")
+        answer_ip = ev.get("answer_ip")
+
+        if not responder_ip or not query_name or not answer_ip:
+            continue
+        if responder_ip in gateway_ips:
+            continue
+
+        # Check whether the responder legitimately owns the queried name
+        node = nodes.get(responder_ip, {})
+        hostname = node.get("hostname", "") or ""
+        bare = hostname.split(".")[0].lower()
+        claimed = query_name.lower().split(".")[0]
+
+        if hostname and bare == claimed:
+            continue  # Looks legitimate — responding to its own name
+
+        key = (responder_ip, query_name)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        detail = (f"{responder_ip} answered LLMNR query for '{query_name}'"
+                  + (f" (hostname: '{hostname}')" if hostname else "")
+                  + " — possible Responder/MITM poisoning")
+        findings.append(dict(
+            severity="HIGH",
+            category="LLMNR Poisoning Indicator",
+            src=responder_ip,
+            dst=query_name,
+            detail=detail,
+            recommendation="Investigate for LLMNR poisoning (Responder, Inveigh). "
+                           "Disable LLMNR/NBT-NS via Group Policy if not required.",
+        ))
+
+    return findings
+
+
 def compute_dns_findings(dns_events):
     """
     Finding #10 — DNS tunneling indicators, derived from extract_dns_events()

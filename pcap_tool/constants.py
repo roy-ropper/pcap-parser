@@ -29,7 +29,7 @@ WELL_KNOWN = {
     ("UDP",69):"TFTP",  ("UDP",123):"NTP",  ("UDP",137):"NetBIOS",
     ("UDP",138):"NetBIOS",("UDP",161):"SNMP",("UDP",162):"SNMP-trap",
     ("UDP",500):"IKE",  ("UDP",514):"Syslog",("UDP",1900):"SSDP",
-    ("UDP",4500):"IKE-NAT",("UDP",5353):"mDNS",
+    ("UDP",4500):"IKE-NAT",("UDP",5353):"mDNS",("UDP",5355):"LLMNR",
 }
 
 HTTP_PORTS  = {80, 8080, 8000, 8008}
