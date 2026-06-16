@@ -1,4 +1,5 @@
-<h2 id="tls">TLS Sessions ({{ result.tls_sessions|length }})</h2>
+<details class="section" open>
+<summary id="tls">TLS Sessions ({{ result.tls_sessions|length }})</summary>
 {% if not result.tls_sessions %}
 <p class="muted">No TLS handshakes detected in capture.</p>
 {% else %}
@@ -34,3 +35,4 @@
   </tbody>
 </table>
 {% endif %}
+</details>

@@ -5,8 +5,8 @@ readable regardless of capture size."""
 from dataclasses import dataclass, field
 from collections import defaultdict
 
-DEFAULT_MAX_EDGES = 40
-TOP_TALKER_COUNT = 8
+DEFAULT_MAX_EDGES = 20
+TOP_TALKER_COUNT = 4
 
 # Edge tags that are always rendered in full, regardless of byte volume —
 # these represent the things a red-teamer actually cares about.

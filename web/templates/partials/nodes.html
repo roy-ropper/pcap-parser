@@ -1,4 +1,5 @@
-<h2 id="nodes">Node Summary ({{ result.nodes|length }})</h2>
+<details class="section" open>
+<summary id="nodes">Node Summary ({{ result.nodes|length }})</summary>
 <input class="filter-box" type="text" placeholder="Filter nodes…" data-filter-table="nodes-table">
 <table class="data" id="nodes-table">
   <thead>
@@ -27,3 +28,4 @@
     {% endfor %}
   </tbody>
 </table>
+</details>

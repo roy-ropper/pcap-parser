@@ -1,4 +1,5 @@
-<h2 id="banners">Banner &amp; Resource Intelligence ({{ result.banner_hits|length }})</h2>
+<details class="section" open>
+<summary id="banners">Banner &amp; Resource Intelligence ({{ result.banner_hits|length }})</summary>
 {% if not result.banner_hits %}
 <p class="muted">No banners or notable resources detected.</p>
 {% else %}
@@ -23,3 +24,4 @@
   </tbody>
 </table>
 {% endif %}
+</details>

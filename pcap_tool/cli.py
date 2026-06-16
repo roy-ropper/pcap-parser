@@ -174,6 +174,30 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
             nodes[ip]["fqdn"] = fqdn
             if not nodes[ip]["hostname"] or "." not in nodes[ip]["hostname"]:
                 nodes[ip]["hostname"] = fqdn
+
+    # Build hosts_by_domain: for each discovered domain, collect unique {ip, hostname} pairs
+    # from node hostnames and DHCP leases so the dashboard can display a per-domain host table.
+    hosts_by_domain = {}
+    for domain in network_names["discovered_domains"]:
+        seen_ips = set()
+        hosts = []
+        suffix = "." + domain
+        for ip, node in nodes.items():
+            hn = node.get("fqdn") or node.get("hostname") or ""
+            if hn == domain or hn.endswith(suffix):
+                if ip not in seen_ips:
+                    seen_ips.add(ip)
+                    hosts.append({"ip": ip, "hostname": hn})
+        for lease in network_names["dhcp_leases"]:
+            if lease.get("domain_suffix") == domain:
+                lip = lease.get("ip", "")
+                if lip and lip not in seen_ips:
+                    seen_ips.add(lip)
+                    hosts.append({"ip": lip,
+                                  "hostname": lease.get("fqdn") or lease.get("hostname") or ""})
+        hosts_by_domain[domain] = sorted(hosts, key=lambda h: h["ip"])
+    network_names["hosts_by_domain"] = hosts_by_domain
+
     n_dom = len(network_names["discovered_domains"])
     n_leases = len(network_names["dhcp_leases"])
     n_llmnr = len(network_names["llmnr_queries"])

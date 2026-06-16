@@ -28,10 +28,16 @@ DEVICE_FILL_STROKE = {
 }
 
 EDGE_TAG_PRIORITY = [
-    "cleartext_creds", "cleartext", "lateral_movement", "beaconing",
-    "dns_tunneling", "exfiltration", "unusual_outbound", "icmp_tunneling",
-    "snmp_cleartext", "deauth", "radius_eap_tls", "ssh", "wifi_assoc",
+    "cleartext_creds", "exfiltration", "lateral_movement", "beaconing",
+    "dns_tunneling", "icmp_tunneling", "deauth", "snmp_cleartext",
+    "unusual_outbound", "cleartext", "radius_eap_tls", "ssh", "wifi_assoc",
 ]
+
+# Only these tags earn a visible label — everything else just gets colour.
+_LABEL_TAGS = {
+    "cleartext_creds", "exfiltration", "lateral_movement",
+    "dns_tunneling", "beaconing", "icmp_tunneling", "deauth",
+}
 
 # Fixed palette so we can predeclare one arrowhead <marker> per colour.
 _ARROW_COLORS = ["#b85450", "#d79b00", "#9673a6", "#00695c", "#6c8ebf", "#cccccc", "#999999"]
@@ -61,39 +67,46 @@ def _note_value(notes, prefix):
 
 
 def _edge_style(e, max_bytes):
-    """Returns (color, stroke_width, dasharray_or_None, label)."""
+    """Returns (color, stroke_width, dasharray_or_None, label_or_None).
+
+    Labels are only emitted for high-signal tags (_LABEL_TAGS).  Routine
+    cleartext/SSH/top-talker edges are coloured but unlabelled so the canvas
+    stays readable — colour conveys the risk category without text clutter.
+    """
     proto = e.protocols[0] if e.protocols else ""
 
     for tag in EDGE_TAG_PRIORITY:
         if tag not in e.tags:
             continue
-        if tag in ("cleartext_creds", "cleartext"):
-            return "#b85450", 3, None, f"⚠ Cleartext: {proto}"
+        if tag == "cleartext_creds":
+            return "#b85450", 2.5, None, f"⚠ Creds: {proto}"
+        if tag == "exfiltration":
+            return "#b85450", _log_width(e.bytes, max_bytes, 2, 5), None, "Exfil"
         if tag == "lateral_movement":
-            return "#d79b00", 2.5, None, f"Lateral: {proto}"
+            return "#d79b00", 2, None, f"Lateral: {proto}"
         if tag == "beaconing":
-            return "#b85450", 2, "4,4", "Beaconing"
+            return "#b85450", 1.5, "4,4", "Beaconing"
         if tag == "dns_tunneling":
             domain = _note_value(e.notes, "DNS tunneling suspected")
-            return "#9673a6", 2, "3,3", (f"DNS tunneling: {domain}" if domain else "DNS tunneling?")
-        if tag == "exfiltration":
-            return "#b85450", _log_width(e.bytes, max_bytes, 2, 6), None, "Exfiltration"
-        if tag == "unusual_outbound":
-            return "#b85450", _log_width(e.bytes, max_bytes, 2, 6), None, "Unusual outbound"
+            return "#9673a6", 2, "3,3", (f"DNS tunnel: {domain[:20]}" if domain else "DNS tunnel?")
         if tag == "icmp_tunneling":
-            return "#b85450", 2, "5,3", "ICMP tunneling?"
-        if tag == "snmp_cleartext":
-            return "#d79b00", 2, None, "SNMP (cleartext)"
+            return "#b85450", 1.5, "5,3", "ICMP tunnel?"
         if tag == "deauth":
-            return "#b85450", 2, None, "Deauth/disassoc"
+            return "#b85450", 1.5, None, "Deauth"
+        if tag == "snmp_cleartext":
+            return "#d79b00", 1.5, None, None
+        if tag == "unusual_outbound":
+            return "#b85450", 1.5, None, None
+        if tag == "cleartext":
+            return "#b85450", 1.5, None, None   # colour only — no label
         if tag == "radius_eap_tls":
-            return "#00695c", 1.5, "2,2", "RADIUS / EAP-TLS"
+            return "#00695c", 1.5, "2,2", None
         if tag == "ssh":
-            return "#6c8ebf", 1.5, None, "SSH"
+            return "#6c8ebf", 1.5, None, None
         if tag == "wifi_assoc":
-            return "#cccccc", 1, None, _note_value(e.notes, "SSID")
+            return "#cccccc", 1, None, None
 
-    return "#999999", _log_width(e.bytes, max_bytes, 1, 4), None, proto
+    return "#999999", _log_width(e.bytes, max_bytes, 1, 3), None, None
 
 
 def _node_label_lines(tn):
@@ -308,9 +321,27 @@ def generate_topology_svg(topology, render, title="Network Diagram"):
         zt, zfill, zstroke = zone_titles.get(zi, ("Zone", "#eeeeee", "#999999"))
         _draw_zone(svg, zt, zfill, zstroke, ids, topology, PAGE_X, zy, node_pos_map)
 
-    # Traffic edges.
-    max_bytes = max((e.bytes for e in render.edges), default=1) or 1
+    # Traffic edges — bundle parallel (src→dst) pairs so only one line is
+    # drawn per node pair, picking the highest-priority edge for each pair.
+    _tag_rank = {t: i for i, t in enumerate(EDGE_TAG_PRIORITY)}
+
+    def _pair_rank(e):
+        return min((_tag_rank.get(t, 99) for t in e.tags), default=99)
+
+    bundled = {}
     for e in render.edges:
+        key = (e.src, e.dst)
+        if key not in bundled or _pair_rank(e) < _pair_rank(bundled[key]):
+            bundled[key] = e
+
+    max_bytes = max((e.bytes for e in bundled.values()), default=1) or 1
+    labels_drawn = set()   # avoid duplicate labels at the same midpoint
+    labels_budget = 6      # max edge labels on the whole diagram
+
+    # Draw highest-priority edges first so the label budget goes to the worst findings.
+    draw_order = sorted(bundled.values(), key=_pair_rank)
+
+    for e in draw_order:
         p1 = node_pos_map.get(e.src)
         p2 = node_pos_map.get(e.dst)
         if not p1 or not p2:
@@ -318,7 +349,7 @@ def generate_topology_svg(topology, render, title="Network Diagram"):
         color, w, dash, label = _edge_style(e, max_bytes)
         attrs = {
             "x1": str(p1[0]), "y1": str(p1[1]), "x2": str(p2[0]), "y2": str(p2[1]),
-            "stroke": color, "stroke-width": f"{w:.1f}",
+            "stroke": color, "stroke-width": f"{w:.1f}", "stroke-opacity": "0.75",
         }
         if dash:
             attrs["stroke-dasharray"] = dash
@@ -326,14 +357,22 @@ def generate_topology_svg(topology, render, title="Network Diagram"):
             attrs["marker-end"] = f"url(#arrow-{color.lstrip('#')})"
         ET.SubElement(svg, "line", attrs)
 
-        if label:
-            mx, my = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
-            ET.SubElement(svg, "rect", {
-                "x": str(mx - len(label) * 3 - 4), "y": str(my - 9),
-                "width": str(len(label) * 6 + 8), "height": "14",
-                "fill": "#ffffff", "fill-opacity": "0.85",
-            })
-            _text(svg, mx, my + 3, label, **{"text-anchor": "middle", "font-size": "9", "fill": color})
+        if label and labels_budget > 0:
+            mx = round((p1[0] + p2[0]) / 2)
+            my = round((p1[1] + p2[1]) / 2)
+            # Skip if a label was already placed very close to this midpoint
+            slot = (mx // 40, my // 30)
+            if slot not in labels_drawn:
+                labels_drawn.add(slot)
+                labels_budget -= 1
+                pad_x = len(label) * 3 + 5
+                ET.SubElement(svg, "rect", {
+                    "x": str(mx - pad_x), "y": str(my - 9),
+                    "width": str(pad_x * 2), "height": "14",
+                    "fill": "#ffffff", "fill-opacity": "0.9", "rx": "2",
+                })
+                _text(svg, mx, my + 3, label,
+                      **{"text-anchor": "middle", "font-size": "9", "fill": color})
 
     # "+N more" node summaries for collapsed low-value traffic.
     for node_id, summary in render.node_summaries.items():

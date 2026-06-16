@@ -51,7 +51,7 @@
 </div>
 {% endif %}
 <div class="card" style="padding:0.5rem">
-  <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem">
+  <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem;flex-wrap:wrap">
     <button onclick="svgZoom(1.25)" title="Zoom in"
             style="padding:0.2rem 0.6rem;font-size:1rem;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#fff">+</button>
     <button onclick="svgZoom(0.8)" title="Zoom out"
@@ -59,6 +59,9 @@
     <button onclick="svgReset()" title="Reset view"
             style="padding:0.2rem 0.6rem;font-size:0.8rem;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#fff">Reset</button>
     <span class="muted" style="font-size:0.8em;margin-left:0.3rem">Scroll to zoom · Drag to pan</span>
+    <a href="{{ url_for('job_topology_svg', job_id=job.id) }}" target="_blank" rel="noopener"
+       style="margin-left:auto;font-size:0.82em;text-decoration:none;color:#1a6fba;white-space:nowrap"
+       title="Open diagram in new tab">&#8599; Open in new tab</a>
   </div>
   <div id="svg-viewport" style="overflow:hidden;border:1px solid #e0e0e0;border-radius:4px;
        background:#fafafa;height:520px;position:relative;cursor:grab">
@@ -167,13 +170,21 @@
 <div class="card">
   <h3>Top findings</h3>
   {% if result.findings %}
+  {# One entry per category (first/worst-severity occurrence, findings list is severity-sorted) #}
+  {% set _glance = namespace(seen=[], rows=[]) %}
+  {% for f in result.findings %}
+    {% if f.category not in _glance.seen %}
+      {% set _glance.seen = _glance.seen + [f.category] %}
+      {% set _glance.rows = _glance.rows + [f] %}
+    {% endif %}
+  {% endfor %}
   <ul>
-    {% for f in result.findings[:8] %}
+    {% for f in _glance.rows[:6] %}
     <li><span class="badge badge-{{ f.severity }}">{{ f.severity }}</span>
-        {{ f.category }} — {{ f.src }} → {{ f.dst }}: {{ f.detail }}</li>
+        <strong>{{ f.category }}</strong> — {{ f.detail[:80] }}{% if f.detail|length > 80 %}…{% endif %}</li>
     {% endfor %}
   </ul>
-  {% if result.findings|length > 8 %}<p class="muted"><a href="#findings">See all {{ result.findings|length }} findings…</a></p>{% endif %}
+  {% if _glance.rows|length > 6 %}<p class="muted"><a href="#findings">See all {{ _glance.rows|length }} finding types…</a></p>{% endif %}
   {% else %}
   <p class="muted">No pentest findings.</p>
   {% endif %}

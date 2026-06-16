@@ -1,21 +1,41 @@
-<h2 id="network-names">Network Names &amp; Domains</h2>
+<details class="section" open>
+<summary id="network-names">Network Names &amp; Domains</summary>
 {% set nn = result.get('network_names', {}) %}
 {% if not nn %}
 <p class="muted">Network naming data not available (capture pre-dates this feature).</p>
 {% else %}
 
 {% if nn.discovered_domains %}
+{% set hbd = nn.get('hosts_by_domain', {}) %}
+{% for d in nn.discovered_domains %}
 <div class="card" style="margin-bottom:0.75rem">
-  <strong>Discovered Domains / Workgroups</strong>
-  <div style="margin-top:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem">
-    {% for d in nn.discovered_domains %}
-    <span style="display:inline-block;background:#e8f0fe;border:1px solid #4472c4;
-                 border-radius:4px;padding:0.2rem 0.6rem;font-family:monospace;font-size:0.85em">
+  <div style="display:flex;align-items:baseline;gap:0.6rem;margin-bottom:0.5rem">
+    <span style="background:#e8f0fe;border:1px solid #4472c4;border-radius:4px;
+                 padding:0.2rem 0.7rem;font-family:monospace;font-size:0.95em;font-weight:600">
       {{ d }}
     </span>
-    {% endfor %}
+    <span class="muted" style="font-size:0.82em">Discovered Domain / Workgroup</span>
   </div>
+  {% set hosts = hbd.get(d, []) %}
+  {% if hosts %}
+  <table class="data" style="margin:0">
+    <thead>
+      <tr><th>IP Address</th><th>Hostname / FQDN</th></tr>
+    </thead>
+    <tbody>
+      {% for h in hosts %}
+      <tr>
+        <td><code>{{ h.ip }}</code></td>
+        <td>{{ h.hostname or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted" style="margin:0;font-size:0.85em">No hosts resolved to this domain in this capture.</p>
+  {% endif %}
 </div>
+{% endfor %}
 {% else %}
 <p class="muted">No domain names discovered in this capture (no DHCP opt-15 or recurring DNS query patterns).</p>
 {% endif %}
@@ -78,3 +98,4 @@
 {% endif %}
 
 {% endif %}
+</details>

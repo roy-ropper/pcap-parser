@@ -1,4 +1,5 @@
-<h2 id="dns">DNS / mDNS Events ({{ result.dns_events|length }})</h2>
+<details class="section" open>
+<summary id="dns">DNS / mDNS Events ({{ result.dns_events|length }})</summary>
 {% if not result.dns_events %}
 <p class="muted">No DNS/mDNS events captured in this PCAP.</p>
 {% else %}
@@ -26,3 +27,4 @@
   </tbody>
 </table>
 {% endif %}
+</details>

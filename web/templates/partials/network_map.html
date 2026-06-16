@@ -1,4 +1,5 @@
-<h2 id="network-map">Network Map</h2>
+<details class="section" open>
+<summary id="network-map">Network Map</summary>
 {% if result.subnet_map.subnets|length > 1 and result.subnet_map.links %}
 <p class="muted">High-level view of detected subnets and hosts. Thicker grey lines show traffic between subnets; thicker blue lines show the busiest individual host-to-host conversations — hover any line for details.</p>
 {% else %}
@@ -37,3 +38,4 @@
 </div>
 <script type="application/json" id="network-map-links">{{ result.subnet_map.links|tojson }}</script>
 <script type="application/json" id="network-map-node-links">{{ result.subnet_map.node_links|tojson }}</script>
+</details>

@@ -1,23 +1,77 @@
-<h2 id="findings">Pentest Findings ({{ result.findings|length }})</h2>
+<details class="section" open>
+<summary id="findings">Pentest Findings ({{ result.findings|length }})</summary>
 {% if not result.findings %}
 <p class="muted">No findings.</p>
 {% else %}
-<input class="filter-box" type="text" placeholder="Filter findings…" data-filter-table="findings-table">
+
+{# Group findings by category, preserving first-seen order #}
+{% set _seen_cats = namespace(vals=[]) %}
+{% for f in result.findings %}
+  {% if f.category not in _seen_cats.vals %}
+    {% set _seen_cats.vals = _seen_cats.vals + [f.category] %}
+  {% endif %}
+{% endfor %}
+
+{% set _sev_rank = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3, 'INFO': 4} %}
+
 <table class="data" id="findings-table">
   <thead>
-    <tr><th>Severity</th><th>Category</th><th>Source</th><th>Destination</th><th>Detail</th><th>Recommendation</th></tr>
+    <tr>
+      <th>Severity</th>
+      <th>Category</th>
+      <th>Affected Hosts</th>
+      <th>Detail</th>
+    </tr>
   </thead>
   <tbody>
-    {% for f in result.findings %}
-    <tr class="row-{{ f.severity }}">
-      <td><span class="badge badge-{{ f.severity }}">{{ f.severity }}</span></td>
-      <td>{{ f.category }}</td>
-      <td>{{ f.src }}</td>
-      <td>{{ f.dst }}</td>
-      <td>{{ f.detail }}</td>
-      <td>{{ f.recommendation }}</td>
-    </tr>
+  {% for cat in _seen_cats.vals %}
+    {% set items = result.findings | selectattr('category', 'equalto', cat) | list %}
+    {% set count = items | length %}
+
+    {# Worst severity in this group #}
+    {% set ns = namespace(worst_rank=4, worst='INFO', best_item=items[0]) %}
+    {% for item in items %}
+      {% set item_rank = _sev_rank.get(item.severity, 4) %}
+      {% if item_rank < ns.worst_rank %}
+        {% set ns.worst_rank = item_rank %}
+        {% set ns.worst = item.severity %}
+        {% set ns.best_item = item %}
+      {% endif %}
     {% endfor %}
+
+    {# Unique source hosts #}
+    {% set srcs = namespace(vals=[]) %}
+    {% for item in items %}
+      {% if item.src and item.src not in srcs.vals %}
+        {% set srcs.vals = srcs.vals + [item.src] %}
+      {% endif %}
+    {% endfor %}
+
+    <tr class="row-{{ ns.worst }}">
+      <td style="white-space:nowrap">
+        <span class="badge badge-{{ ns.worst }}">{{ ns.worst }}</span>
+      </td>
+      <td>
+        {{ cat }}
+        {% if count > 1 %}
+        <span style="display:inline-block;background:#e0e0e0;color:#444;border-radius:10px;
+                     padding:0.05rem 0.45rem;font-size:0.75em;margin-left:0.3rem;font-weight:600">
+          ×{{ count }}
+        </span>
+        {% endif %}
+      </td>
+      <td style="font-size:0.88em">
+        {% for src in srcs.vals[:3] %}
+          <code>{{ src }}</code>{% if not loop.last %}<br>{% endif %}
+        {% endfor %}
+        {% if srcs.vals | length > 3 %}
+          <span class="muted">+{{ srcs.vals | length - 3 }} more</span>
+        {% endif %}
+      </td>
+      <td style="font-size:0.88em">{{ ns.best_item.detail }}</td>
+    </tr>
+  {% endfor %}
   </tbody>
 </table>
 {% endif %}
+</details>
