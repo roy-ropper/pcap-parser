@@ -168,11 +168,16 @@ def _run_job(job_id, pcap_path, options):
         with open(vsdx_path, "wb") as f:
             f.write(result["vsdx_bytes"])
 
+        svg_path = os.path.join(out_dir, "topology.svg")
+        with open(svg_path, "w", encoding="utf-8") as f:
+            f.write(result["topology_svg"])
+
         job["paths"] = {
             "xlsx": xlsx_path,
             "drawio_l3": l3_path,
             "drawio_l2": l2_path,
             "vsdx": vsdx_path,
+            "topology_svg": svg_path,
             "certs_dir": certs_dir if os.path.isdir(certs_dir) else None,
         }
 

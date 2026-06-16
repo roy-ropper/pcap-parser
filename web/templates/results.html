@@ -19,6 +19,7 @@
 
 <div class="results-layout">
 <nav class="sidebar-nav">
+  <a href="#diagram-preview">Diagram Preview</a>
   <a href="#glance">At a Glance</a>
   <a href="#findings">Findings</a>
   <a href="#nodes">Nodes</a>
@@ -33,6 +34,42 @@
   <a href="#network-map">Network Map</a>
 </nav>
 <div class="results-main">
+
+<h2 id="diagram-preview">Diagram Preview</h2>
+{% if result.capture_device %}
+<div class="card" style="margin-bottom:0.5rem">
+  {% set cd = result.capture_device %}
+  {% if cd.confidence == 'unknown' %}
+  <p class="muted" style="margin:0">&#128225; Capture device: <em>unknown</em> — {{ cd.note }}</p>
+  {% else %}
+  <p style="margin:0">&#128225; <strong>Capture device:</strong>
+    {{ cd.hostname or cd.ip or cd.mac }}
+    <span class="muted">({{ cd.mac }} &middot; confidence: {{ cd.confidence }})</span>
+  </p>
+  {% endif %}
+</div>
+{% endif %}
+<div class="card" style="overflow-x:auto;padding:0.5rem">
+  <img src="{{ url_for('job_topology_svg', job_id=job.id) }}"
+       alt="Network topology diagram"
+       style="max-width:100%;border:1px solid #e0e0e0;border-radius:4px">
+</div>
+{% if enable_drawio_viewer %}
+<details class="card" style="margin-top:0.5rem">
+  <summary style="cursor:pointer;font-weight:bold">&#128196; Open in diagrams.net (opt-in viewer)</summary>
+  <p class="muted" style="margin:0.5rem 0">
+    &#9888; <strong>Privacy notice:</strong> clicking the link below will load
+    <code>app.diagrams.net</code> in your browser and send the diagram XML
+    (including hostnames, IP addresses, SSIDs, and pentest findings) to that
+    third-party service. Only use this if you are comfortable with that data
+    leaving this machine.
+  </p>
+  <p><a href="{{ url_for('job_download', job_id=job.id, artifact='drawio_l3') }}"
+        target="_blank">Download .drawio</a> then open at
+    <a href="https://app.diagrams.net/" target="_blank" rel="noopener noreferrer">app.diagrams.net</a>
+  </p>
+</details>
+{% endif %}
 
 <h2 id="glance">At a Glance</h2>
 {% set sev_counts = {'CRITICAL':0,'HIGH':0,'MEDIUM':0,'LOW':0,'INFO':0} %}

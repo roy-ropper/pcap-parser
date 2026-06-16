@@ -8,9 +8,12 @@ from collections import defaultdict
 # Diagram styles & layout
 # ─────────────────────────────────────────────────────────────────────────────
 
-SHAPE_SERVER = "shape=mxgraph.cisco.servers.standard_server;"
-SHAPE_PC     = "shape=mxgraph.cisco.computers_and_peripherals.pc;"
-SHAPE_CLOUD  = "shape=mxgraph.cisco.storage.cloud;"
+SHAPE_SERVER      = "shape=mxgraph.cisco.servers.standard_server;"
+SHAPE_PC          = "shape=mxgraph.cisco.computers_and_peripherals.pc;"
+SHAPE_CLOUD       = "shape=mxgraph.cisco.storage.cloud;"
+SHAPE_ROUTER      = "shape=mxgraph.cisco.routers.router;"
+SHAPE_AP          = "shape=mxgraph.cisco.wireless.wireless_access_point;"
+SHAPE_WORKSTATION = "shape=mxgraph.cisco.computers_and_peripherals.workstation;"
 
 ROLE_FILL_STROKE = {
     "server":   ("#dae8fc","#6c8ebf"),

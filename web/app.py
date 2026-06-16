@@ -19,6 +19,7 @@ from .jobs import UPLOAD_DIR, OUTPUT_DIR
 
 ALLOWED_EXTENSIONS = {".pcap", ".pcapng", ".cap"}
 MAX_UPLOAD_MB = int(os.environ.get("PCAP_TOOL_MAX_UPLOAD_MB", "500"))
+ENABLE_DRAWIO_VIEWER = os.environ.get("PCAP_TOOL_ENABLE_DRAWIO_VIEWER", "").lower() in ("1", "true", "yes")
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
@@ -134,7 +135,19 @@ def job_results(job_id):
         abort(404)
     if job["state"] != "done":
         return redirect(url_for("job_status_page", job_id=job_id))
-    return render_template("results.html", job=job, result=job["result"])
+    return render_template("results.html", job=job, result=job["result"],
+                           enable_drawio_viewer=ENABLE_DRAWIO_VIEWER)
+
+
+@app.route("/jobs/<job_id>/preview/topology.svg")
+def job_topology_svg(job_id):
+    job = jobs.get_job(job_id)
+    if not job or job["state"] != "done":
+        abort(404)
+    p = job["paths"].get("topology_svg")
+    if not p or not os.path.isfile(p):
+        abort(404)
+    return send_file(p, mimetype="image/svg+xml")
 
 
 _ARTIFACTS = {

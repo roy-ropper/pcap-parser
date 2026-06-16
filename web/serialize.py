@@ -152,6 +152,7 @@ def prepare_result(result):
     result.pop("vsdx_bytes", None)
     result.pop("drawio_l3_xml", None)
     result.pop("drawio_l2_xml", None)
+    result.pop("topology_svg", None)
 
     result["edges"] = edges_to_list(result.get("edges", {}))
     result["nodes"] = nodes_to_list(result.get("nodes", {}))

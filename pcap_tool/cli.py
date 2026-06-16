@@ -17,7 +17,10 @@ from .extractors.tls import extract_tls_sessions
 from .extractors.certificates import extract_certificates
 from .extractors.dns import extract_dns_events
 from .extractors.wifi import extract_wifi_events
-from .diagrams.drawio_l3 import generate_drawio
+from .topology.model import build_topology
+from .topology.render_policy import select_edges
+from .diagrams.drawio_topology import generate_topology_drawio
+from .diagrams.topology_svg import generate_topology_svg
 from .diagrams.drawio_l2 import generate_l2_drawio
 from .diagrams.vsdx import generate_vsdx
 from .excel.workbook import generate_xlsx
@@ -184,7 +187,20 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         progress(f"[*] {len(certificates)} certificate(s) written → {certs_dir}/")
 
     progress("[*] Generating diagrams ...", stage=9)
-    drawio_l3_xml = generate_drawio(nodes, findings, gateways, traceroutes, title=title)
+
+    _partial = dict(
+        packets=packets, nodes=nodes, edges=edges, findings=findings,
+        cleartext_hits=cleartext_hits, gateways=gateways,
+        traceroutes=traceroutes, wifi_data=wifi_data, title=title,
+    )
+    topology = build_topology(_partial)
+    render = select_edges(topology)
+    drawio_l3_xml = generate_topology_drawio(topology, render, title=title)
+    topology_svg = generate_topology_svg(topology, render, title=title)
+    progress(f"[*] Topology diagram generated "
+             f"({len(render.edges)} edges rendered, "
+             f"{len(render.node_summaries)} nodes summarised)")
+
     drawio_l2_xml = generate_l2_drawio(wifi_data, nodes, arp_table,
                                         title=f"{title} — L2/Wi-Fi Topology")
     vsdx_bytes = generate_vsdx(nodes, edges, findings, gateways, title=title).getvalue()
@@ -200,6 +216,8 @@ def run_pipeline(pcap_path, min_packets=1, collapse_external=False,
         certificates=certificates,
         drawio_l3_xml=drawio_l3_xml, drawio_l2_xml=drawio_l2_xml,
         vsdx_bytes=vsdx_bytes,
+        topology_svg=topology_svg,
+        capture_device=topology.capture_device,
         title=title,
     )
 

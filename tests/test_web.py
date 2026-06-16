@@ -131,6 +131,21 @@ def test_job_delete_removes_data(tmp_path, client):
     assert job_id.encode() not in resp.data
 
 
+def test_topology_svg_preview(tmp_path, client):
+    pcap_path = _make_pcap(tmp_path)
+    job = _run_to_completion(tmp_path, pcap_path)
+    resp = client.get(f"/jobs/{job['id']}/preview/topology.svg")
+    assert resp.status_code == 200
+    assert resp.mimetype == "image/svg+xml"
+    assert b"<svg" in resp.data or resp.data.startswith(b"<?xml")
+
+
+def test_topology_svg_preview_not_done(client):
+    job = jobs.create_job("pending.pcap")
+    resp = client.get(f"/jobs/{job['id']}/preview/topology.svg")
+    assert resp.status_code == 404
+
+
 def test_download_all_zip(tmp_path, client):
     pcap_path = _make_pcap(tmp_path)
     job = _run_to_completion(tmp_path, pcap_path)

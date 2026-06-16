@@ -276,6 +276,19 @@ gunicorn -w 1 --threads 4 -b 0.0.0.0:8000 web.app:app
 | `PCAP_TOOL_UPLOAD_DIR` | `/tmp/pcap_tool_uploads` (Docker: `/data/uploads`) | Where uploaded captures are stored |
 | `PCAP_TOOL_OUTPUT_DIR` | `/tmp/pcap_tool_outputs` (Docker: `/data/outputs`) | Where generated reports/diagrams are stored |
 | `PCAP_TOOL_MAX_UPLOAD_MB` | `500` | Max upload size in MB |
+| `PCAP_TOOL_ENABLE_DRAWIO_VIEWER` | *(unset — off by default)* | Set to `1`/`true`/`yes` to enable the opt-in diagrams.net viewer link on the results page (see privacy note below) |
+
+### draw.io viewer — privacy notice
+
+By default the results page shows a **local SVG preview** of the topology
+diagram rendered entirely in the browser with no external requests.
+
+Setting `PCAP_TOOL_ENABLE_DRAWIO_VIEWER=1` adds an extra collapsed section
+that links the downloaded `.drawio` file to
+[app.diagrams.net](https://app.diagrams.net/). **Enabling this causes the
+browser to contact a third-party service and may transmit diagram content
+(hostnames, IP addresses, SSIDs, pentest findings) to that server.**  Do not
+enable this flag on engagement machines or when handling sensitive captures.
 
 ---
 
